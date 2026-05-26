@@ -13,7 +13,7 @@ Checklist:
 - [x] Confirm `.env` at the project root is the source of truth for `OPENROUTER_API_KEY`.
 - [x] Confirm SQLite is the database choice.
 - [x] Confirm the simplest available local default ports will be used.
-- [ ] Get user approval before Part 2 begins.
+- [x] Get user approval before Part 2 begins.
 
 Tests:
 - Documentation-only change; no automated test run is required.
@@ -29,23 +29,23 @@ Success criteria:
 Goal: create the local Docker and FastAPI foundation before integrating the real frontend.
 
 Checklist:
-- [ ] Review the current repository layout and existing `backend/` and `scripts/` contents.
-- [ ] Create a minimal FastAPI backend in `backend/`.
-- [ ] Add a health API route, such as `GET /api/health`.
-- [ ] Serve a temporary static HTML page from `/`.
-- [ ] Add Docker infrastructure for a single local container.
-- [ ] Use `uv` for Python dependency management inside the container.
-- [ ] Add start and stop scripts for Windows, macOS, and Linux in `scripts/`.
-- [ ] Keep runtime configuration simple and read environment variables from the project-root `.env`.
-- [ ] Document minimal local usage in the root README if a root README exists, or create a concise one if needed.
+- [x] Review the current repository layout and existing `backend/` and `scripts/` contents.
+- [x] Create a minimal FastAPI backend in `backend/`.
+- [x] Add a health API route, such as `GET /api/health`.
+- [x] Serve a temporary static HTML page from `/`.
+- [x] Add Docker infrastructure for a single local container.
+- [x] Use `uv` for Python dependency management inside the container.
+- [x] Add start and stop scripts for Windows, macOS, and Linux in `scripts/`.
+- [x] Keep runtime configuration simple and read environment variables from the project-root `.env`.
+- [x] Document minimal local usage in the root README if a root README exists, or create a concise one if needed.
 
 Tests:
-- [ ] Backend unit test verifies the health API response.
-- [ ] Backend integration test verifies `/` serves the temporary HTML.
-- [ ] Docker build completes successfully.
-- [ ] Container starts locally through the relevant start script.
-- [ ] A browser or HTTP request can load `/` and call `/api/health`.
-- [ ] Stop script stops the running local container.
+- [x] Backend unit test verifies the health API response.
+- [x] Backend integration test verifies `/` serves the temporary HTML.
+- [x] Docker build completes successfully.
+- [x] Container starts locally through the relevant start script.
+- [x] A browser or HTTP request can load `/` and call `/api/health`.
+- [x] Stop script stops the running local container.
 
 Success criteria:
 - The app runs locally in Docker.
