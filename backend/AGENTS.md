@@ -19,9 +19,13 @@ This directory contains the FastAPI backend for the Project Management MVP.
 
 ## Current behavior
 
-- `GET /` serves a temporary local HTML page.
+- `GET /` serves the static frontend build in Docker.
 - `GET /api/health` returns a JSON health response.
-- There is no database, authentication, board API, or AI integration yet.
+- `GET /api/board` returns the current user's Kanban board.
+- `PUT /api/board` replaces the current user's Kanban board.
+- Board persistence uses SQLite with normalized users, boards, columns, and cards tables.
+- Board API routes require the MVP `X-PM-User: user` header.
+- There is no AI integration yet.
 
 ## Commands
 

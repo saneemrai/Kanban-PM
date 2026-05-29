@@ -111,15 +111,15 @@ Success criteria:
 Goal: propose and document the SQLite persistence approach before writing backend persistence code.
 
 Checklist:
-- [ ] Create a database design document in `docs/`.
-- [ ] Use SQLite as the local database.
-- [ ] Model users so the database can support multiple users later.
-- [ ] Model one board per signed-in user for the MVP.
-- [ ] Store the Kanban board as JSON for MVP simplicity.
-- [ ] Define the JSON shape for columns, cards, and ordering.
-- [ ] Define how initial seed data is created for the hardcoded user.
-- [ ] Define basic migration or initialization behavior for a missing database.
-- [ ] Get user approval before Part 6 begins.
+- [x] Create a database design document in `docs/`.
+- [x] Use SQLite as the local database.
+- [x] Model users so the database can support multiple users later.
+- [x] Model one board per signed-in user for the MVP.
+- [x] Store Kanban data in normalized board, column, and card tables.
+- [x] Define how API board data maps to columns, cards, and ordering.
+- [x] Define how initial seed data is created for the hardcoded user.
+- [x] Define basic migration or initialization behavior for a missing database.
+- [x] Get user approval before Part 6 begins.
 
 Tests:
 - Documentation-only part; no automated test run is required.
@@ -135,23 +135,23 @@ Success criteria:
 Goal: add backend persistence APIs for reading and changing the Kanban board for the signed-in user.
 
 Checklist:
-- [ ] Implement SQLite database initialization when the database file does not exist.
-- [ ] Create the hardcoded MVP user during initialization if missing.
-- [ ] Store one board JSON document for the user.
-- [ ] Add `GET /api/board` for the current user.
-- [ ] Add `PUT /api/board` or equivalent simple update route for replacing the current board JSON.
-- [ ] Add focused validation for the board JSON shape.
-- [ ] Keep API auth simple and aligned with Part 4's MVP session approach.
-- [ ] Return clear HTTP errors for invalid credentials, missing session, and invalid board data.
-- [ ] Avoid partial card-specific endpoints unless required by frontend integration.
+- [x] Implement SQLite database initialization when the database file does not exist.
+- [x] Create the hardcoded MVP user during initialization if missing.
+- [x] Store one normalized board for the user across board, column, and card tables.
+- [x] Add `GET /api/board` for the current user.
+- [x] Add `PUT /api/board` or equivalent simple update route for replacing the current board data.
+- [x] Add focused validation for the board data shape.
+- [x] Keep API auth simple and aligned with Part 4's MVP session approach.
+- [x] Return clear HTTP errors for invalid credentials, missing session, and invalid board data.
+- [x] Avoid partial card-specific endpoints unless required by frontend integration.
 
 Tests:
-- [ ] Backend unit tests for database initialization.
-- [ ] Backend unit tests for seed user and seed board creation.
-- [ ] Backend API tests for reading the board.
-- [ ] Backend API tests for updating the board.
-- [ ] Backend API tests for invalid board payloads.
-- [ ] Backend API tests verify persistence across app/database access.
+- [x] Backend unit tests for database initialization.
+- [x] Backend unit tests for seed user and seed board creation.
+- [x] Backend API tests for reading the board.
+- [x] Backend API tests for updating the board.
+- [x] Backend API tests for invalid board payloads.
+- [x] Backend API tests verify persistence across app/database access.
 
 Success criteria:
 - A missing database is created automatically.
