@@ -213,28 +213,28 @@ Success criteria:
 Goal: send board context and chat history to the AI, then apply structured board updates when returned.
 
 Checklist:
-- [ ] Define the AI request shape: user message, conversation history, and current board JSON.
-- [ ] Define the structured AI response shape: assistant message plus optional board JSON update.
-- [ ] Instruct the model to preserve valid board structure and fixed columns.
-- [ ] Validate any returned board update before saving it.
-- [ ] Save a valid AI-updated board to SQLite.
-- [ ] Return the assistant response and whether the board changed.
-- [ ] Reject invalid AI board updates without corrupting stored board data.
-- [ ] Keep the first version simple: full-board JSON replacement is acceptable for MVP.
+- [x] Define the AI request shape: user message, conversation history, and current board JSON.
+- [x] Define the structured AI response shape: assistant message plus optional board JSON update.
+- [x] Instruct the model to preserve valid board structure and fixed columns.
+- [x] Validate any returned board update before saving it.
+- [x] Save a valid AI-updated board to SQLite.
+- [x] Return the assistant response and whether the board changed.
+- [x] Reject invalid AI board updates without corrupting stored board data.
+- [x] Keep the first version simple: full-board JSON replacement is acceptable for MVP.
 
 Tests:
-- [ ] Unit test for prompt/request construction.
-- [ ] Unit test for structured response parsing.
-- [ ] Unit test for valid board update application.
-- [ ] Unit test for invalid board update rejection.
-- [ ] Mocked API test verifies chat response without board changes.
-- [ ] Mocked API test verifies chat response with board changes.
-- [ ] Persistence test verifies AI board changes are saved.
+- [x] Unit test for prompt/request construction.
+- [x] Unit test for structured response parsing.
+- [x] Unit test for valid board update application.
+- [x] Unit test for invalid board update rejection.
+- [x] Mocked API test verifies chat response without board changes.
+- [x] Mocked API test verifies chat response with board changes.
+- [x] Persistence test verifies AI board changes are saved.
 
 Success criteria:
-- The backend sends the AI enough context to reason about the board.
-- The AI can create, edit, or move one or more cards through structured output.
-- Invalid AI output does not damage persisted board state.
+- [x] The backend sends the AI enough context to reason about the board.
+- [x] The AI can create, edit, or move one or more cards through structured output.
+- [x] Invalid AI output does not damage persisted board state.
 
 ## Part 10: AI Chat Sidebar
 

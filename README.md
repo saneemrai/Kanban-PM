@@ -30,6 +30,13 @@ OpenRouter connectivity requires this variable in the project-root `.env`:
 OPENROUTER_API_KEY=...
 ```
 
+Backend AI routes:
+
+```text
+POST /api/ai/test
+POST /api/ai/chat
+```
+
 ## Stop locally
 
 Windows:

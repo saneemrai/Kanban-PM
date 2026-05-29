@@ -1,10 +1,18 @@
 from pathlib import Path
+from copy import deepcopy
 import sqlite3
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.ai_client import OPENROUTER_MODEL, build_openrouter_request
+from app.ai_client import (
+    OPENROUTER_MODEL,
+    AiChatPayload,
+    AiStructuredResponse,
+    build_ai_chat_prompt,
+    build_openrouter_request,
+    parse_ai_response,
+)
 from app.board_store import DEFAULT_BOARD, initialize_database
 from app.main import create_app
 
@@ -47,6 +55,50 @@ def test_ai_client_uses_openrouter_model() -> None:
     assert request["temperature"] == 0
 
 
+def test_ai_chat_prompt_includes_history_and_board() -> None:
+    prompt = build_ai_chat_prompt(
+        AiChatPayload(
+            message="Move the roadmap card to Done.",
+            history=[
+                {
+                    "role": "user",
+                    "content": "Show me what is in backlog.",
+                },
+                {
+                    "role": "assistant",
+                    "content": "There are two backlog cards.",
+                },
+            ],
+        ),
+        DEFAULT_BOARD,
+    )
+
+    assert "Respond with valid JSON only." in prompt
+    assert "Move the roadmap card to Done." in prompt
+    assert "There are two backlog cards." in prompt
+    assert "card-1" in prompt
+    assert "col-backlog" in prompt
+
+
+def test_ai_response_parser_accepts_structured_json() -> None:
+    parsed = parse_ai_response(
+        '{"assistantMessage":"I updated the board.","board":null}'
+    )
+
+    assert parsed.assistantMessage == "I updated the board."
+    assert parsed.board is None
+
+
+def test_ai_response_parser_rejects_invalid_json() -> None:
+    try:
+        parse_ai_response("not json")
+    except HTTPException as error:
+        assert error.status_code == 502
+        assert error.detail == "AI returned invalid JSON."
+    else:
+        raise AssertionError("Expected invalid AI JSON to raise HTTPException.")
+
+
 def test_ai_connectivity_route_returns_response(
     tmp_path: Path,
     monkeypatch,
@@ -72,6 +124,105 @@ def test_ai_connectivity_route_returns_upstream_error(
 
     assert response.status_code == 502
     assert response.json() == {"detail": "OpenRouter returned an error."}
+
+
+def test_ai_chat_requires_user_session(tmp_path: Path) -> None:
+    response = make_client(tmp_path).post(
+        "/api/ai/chat",
+        json={"message": "What should I do next?"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_ai_chat_route_returns_response_without_board_change(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.main.call_ai_chat",
+        lambda payload, board: AiStructuredResponse(
+            assistantMessage="No board changes needed.",
+            board=None,
+        ),
+    )
+    client = make_client(tmp_path)
+
+    response = client.post(
+        "/api/ai/chat",
+        headers=login(client),
+        json={
+            "message": "Summarize the board.",
+            "history": [{"role": "user", "content": "Hello"}],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "message": "No board changes needed.",
+        "boardChanged": False,
+        "board": None,
+    }
+
+
+def test_ai_chat_route_saves_valid_board_update(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    next_board = deepcopy(DEFAULT_BOARD.model_dump())
+    next_board["columns"][0]["cardIds"].remove("card-1")
+    next_board["columns"][4]["cardIds"].append("card-1")
+
+    monkeypatch.setattr(
+        "app.main.call_ai_chat",
+        lambda payload, board: AiStructuredResponse(
+            assistantMessage="Moved the roadmap card to Done.",
+            board=next_board,
+        ),
+    )
+    client = make_client(tmp_path)
+    headers = login(client)
+
+    response = client.post(
+        "/api/ai/chat",
+        headers=headers,
+        json={"message": "Move the roadmap card to Done."},
+    )
+    persisted = client.get("/api/board", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["boardChanged"] is True
+    assert "card-1" in persisted.json()["columns"][4]["cardIds"]
+
+
+def test_ai_chat_route_rejects_invalid_board_without_saving(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    invalid_board = deepcopy(DEFAULT_BOARD.model_dump())
+    invalid_board["columns"] = invalid_board["columns"][:-1]
+
+    monkeypatch.setattr(
+        "app.main.call_ai_chat",
+        lambda payload, board: AiStructuredResponse(
+            assistantMessage="I changed the board.",
+            board=invalid_board,
+        ),
+    )
+    client = make_client(tmp_path)
+    headers = login(client)
+    before = client.get("/api/board", headers=headers).json()
+
+    response = client.post(
+        "/api/ai/chat",
+        headers=headers,
+        json={"message": "Move something."},
+    )
+    after = client.get("/api/board", headers=headers).json()
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "AI returned invalid board data."}
+    assert after == before
 
 
 def test_root_serves_static_frontend(tmp_path: Path) -> None:
