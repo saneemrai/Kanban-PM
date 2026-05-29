@@ -1,44 +1,95 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { KanbanBoard } from "@/components/KanbanBoard";
+import { ApiError, checkSession, login, logout } from "@/lib/api";
 
-const SESSION_KEY = "pm-session-user";
-const VALID_USERNAME = "user";
-const VALID_PASSWORD = "password";
+const SESSION_TOKEN_KEY = "pm-session-token";
 
 export const AuthenticatedApp = () => {
-  const [isSignedIn, setIsSignedIn] = useState(false);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
-    setIsSignedIn(window.localStorage.getItem(SESSION_KEY) === VALID_USERNAME);
+    queueMicrotask(() => {
+      setSessionToken(window.localStorage.getItem(SESSION_TOKEN_KEY));
+    });
   }, []);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const clearSession = useCallback(() => {
+    window.localStorage.removeItem(SESSION_TOKEN_KEY);
+    setSessionToken(null);
+  }, []);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (username === VALID_USERNAME && password === VALID_PASSWORD) {
-      window.localStorage.setItem(SESSION_KEY, VALID_USERNAME);
-      setIsSignedIn(true);
+    try {
+      const session = await login(username, password);
+      window.localStorage.setItem(SESSION_TOKEN_KEY, session.sessionToken);
+      setSessionToken(session.sessionToken);
       setUsername("");
       setPassword("");
       setError("");
-      return;
+    } catch {
+      setError("Invalid username or password.");
     }
-
-    setError("Invalid username or password.");
   };
 
   const handleLogout = () => {
-    window.localStorage.removeItem(SESSION_KEY);
-    setIsSignedIn(false);
+    if (sessionToken) {
+      void logout(sessionToken);
+    }
+    clearSession();
   };
 
-  if (isSignedIn) {
-    return <KanbanBoard onLogout={handleLogout} />;
+  const handleSessionExpired = useCallback(() => {
+    clearSession();
+    setError("Signed out because this user signed in somewhere else.");
+  }, [clearSession]);
+
+  useEffect(() => {
+    if (!sessionToken) {
+      return;
+    }
+
+    let isCurrent = true;
+    const verifySession = async () => {
+      try {
+        await checkSession(sessionToken);
+      } catch (error) {
+        if (
+          isCurrent &&
+          error instanceof ApiError &&
+          error.status === 401
+        ) {
+          handleSessionExpired();
+        }
+      }
+    };
+    const handleFocus = () => {
+      void verifySession();
+    };
+    const intervalId = window.setInterval(verifySession, 10000);
+
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      isCurrent = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [handleSessionExpired, sessionToken]);
+
+  if (sessionToken) {
+    return (
+      <KanbanBoard
+        sessionToken={sessionToken}
+        onLogout={handleLogout}
+        onSessionExpired={handleSessionExpired}
+      />
+    );
   }
 
   return (

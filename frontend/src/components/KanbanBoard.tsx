@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -13,15 +13,40 @@ import {
 } from "@dnd-kit/core";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
-import { createId, initialData, moveCard, type BoardData } from "@/lib/kanban";
+import { ApiError, fetchBoard, saveBoard } from "@/lib/api";
+import {
+  columnEndDropId,
+  createId,
+  initialData,
+  moveCard,
+  type BoardData,
+} from "@/lib/kanban";
 
 type KanbanBoardProps = {
+  sessionToken?: string;
   onLogout?: () => void;
+  onSessionExpired?: () => void;
 };
 
-export const KanbanBoard = ({ onLogout }: KanbanBoardProps) => {
+const getClientY = (event: Event): number | null => {
+  return "clientY" in event && typeof event.clientY === "number"
+    ? event.clientY
+    : null;
+};
+
+export const KanbanBoard = ({
+  sessionToken,
+  onLogout,
+  onSessionExpired,
+}: KanbanBoardProps) => {
   const [board, setBoard] = useState<BoardData>(() => initialData);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(Boolean(sessionToken));
+  const [loadError, setLoadError] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const saveRequestId = useRef(0);
+  const dragStartY = useRef<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -30,70 +55,176 @@ export const KanbanBoard = ({ onLogout }: KanbanBoardProps) => {
   );
 
   const cardsById = useMemo(() => board.cards, [board.cards]);
+  const saveStatusLabel =
+    saveState === "saving" ? "Saving changes" : "All changes saved";
+
+  useEffect(() => {
+    if (!sessionToken) {
+      return;
+    }
+
+    let isCurrent = true;
+    fetchBoard(sessionToken)
+      .then((nextBoard) => {
+        if (isCurrent) {
+          setBoard(nextBoard);
+          setLoadError("");
+        }
+      })
+      .catch((error) => {
+        if (isCurrent) {
+          if (error instanceof ApiError && error.status === 401) {
+            onSessionExpired?.();
+            return;
+          }
+          setLoadError("Board could not be loaded.");
+        }
+      })
+      .finally(() => {
+        if (isCurrent) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [sessionToken, onSessionExpired]);
+
+  const commitBoard = (nextBoard: BoardData) => {
+    setBoard(nextBoard);
+    if (!sessionToken) {
+      return;
+    }
+
+    const requestId = saveRequestId.current + 1;
+    saveRequestId.current = requestId;
+    setSaveError("");
+    setSaveState("saving");
+
+    saveBoard(sessionToken, nextBoard)
+      .then((savedBoard) => {
+        if (saveRequestId.current === requestId) {
+          setBoard(savedBoard);
+          setSaveState("saved");
+        }
+      })
+      .catch((error) => {
+        if (saveRequestId.current === requestId) {
+          if (error instanceof ApiError && error.status === 401) {
+            onSessionExpired?.();
+            return;
+          }
+          setSaveError("Board changes could not be saved.");
+          setSaveState("idle");
+        }
+      });
+  };
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveCardId(event.active.id as string);
+    dragStartY.current = getClientY(event.activatorEvent);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
+    const { active, delta, over } = event;
     setActiveCardId(null);
 
     if (!over || active.id === over.id) {
       return;
     }
 
-    setBoard((prev) => ({
-      ...prev,
-      columns: moveCard(prev.columns, active.id as string, over.id as string),
-    }));
+    const activeRect = active.rect.current.translated ?? active.rect.current.initial;
+    if (!activeRect) {
+      return;
+    }
+
+    const pointerY =
+      dragStartY.current === null
+        ? activeRect.top + activeRect.height / 2
+        : dragStartY.current + delta.y;
+    const overCenterY = over.rect.top + over.rect.height / 2;
+    const isOverColumn = board.columns.some(
+      (column) => column.id === over.id || columnEndDropId(column.id) === over.id
+    );
+    const dropPosition =
+      !isOverColumn && pointerY > overCenterY ? "after" : "before";
+    dragStartY.current = null;
+
+    commitBoard({
+      ...board,
+      columns: moveCard(
+        board.columns,
+        active.id as string,
+        over.id as string,
+        dropPosition
+      ),
+    });
   };
 
   const handleRenameColumn = (columnId: string, title: string) => {
-    setBoard((prev) => ({
-      ...prev,
-      columns: prev.columns.map((column) =>
+    commitBoard({
+      ...board,
+      columns: board.columns.map((column) =>
         column.id === columnId ? { ...column, title } : column
       ),
-    }));
+    });
   };
 
   const handleAddCard = (columnId: string, title: string, details: string) => {
     const id = createId("card");
-    setBoard((prev) => ({
-      ...prev,
+    commitBoard({
+      ...board,
       cards: {
-        ...prev.cards,
+        ...board.cards,
         [id]: { id, title, details: details || "No details yet." },
       },
-      columns: prev.columns.map((column) =>
+      columns: board.columns.map((column) =>
         column.id === columnId
           ? { ...column, cardIds: [...column.cardIds, id] }
           : column
       ),
-    }));
+    });
   };
 
   const handleDeleteCard = (columnId: string, cardId: string) => {
-    setBoard((prev) => {
-      return {
-        ...prev,
-        cards: Object.fromEntries(
-          Object.entries(prev.cards).filter(([id]) => id !== cardId)
-        ),
-        columns: prev.columns.map((column) =>
-          column.id === columnId
-            ? {
-                ...column,
-                cardIds: column.cardIds.filter((id) => id !== cardId),
-              }
-            : column
-        ),
-      };
+    commitBoard({
+      ...board,
+      cards: Object.fromEntries(
+        Object.entries(board.cards).filter(([id]) => id !== cardId)
+      ),
+      columns: board.columns.map((column) =>
+        column.id === columnId
+          ? {
+              ...column,
+              cardIds: column.cardIds.filter((id) => id !== cardId),
+            }
+          : column
+      ),
     });
   };
 
   const activeCard = activeCardId ? cardsById[activeCardId] : null;
+
+  if (isLoading) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-[var(--surface)] px-6 py-12">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
+          Loading board
+        </p>
+      </main>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-[var(--surface)] px-6 py-12">
+        <p className="text-sm font-semibold text-[var(--secondary-purple)]">
+          {loadError}
+        </p>
+      </main>
+    );
+  }
 
   return (
     <div className="relative overflow-hidden">
@@ -104,9 +235,27 @@ export const KanbanBoard = ({ onLogout }: KanbanBoardProps) => {
         <header className="flex flex-col gap-6 rounded-[32px] border border-[var(--stroke)] bg-white/80 p-8 shadow-[var(--shadow)] backdrop-blur">
           <div className="flex flex-wrap items-start justify-between gap-6">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--gray-text)]">
-                Single Board Kanban
-              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--gray-text)]">
+                  Single Board Kanban
+                </p>
+                {sessionToken && saveState !== "idle" ? (
+                  <div
+                    className="inline-flex items-center gap-2 rounded-full border border-[var(--stroke)] bg-white px-3 py-1 text-xs font-semibold text-[var(--navy-dark)] shadow-[0_8px_18px_rgba(3,33,71,0.06)]"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <span
+                      className={
+                        saveState === "saving"
+                          ? "h-2 w-2 rounded-full bg-[var(--primary-blue)]"
+                          : "h-2 w-2 rounded-full bg-[var(--accent-yellow)]"
+                      }
+                    />
+                    {saveStatusLabel}
+                  </div>
+                ) : null}
+              </div>
               <h1 className="mt-3 font-display text-4xl font-semibold text-[var(--navy-dark)]">
                 Kanban Studio
               </h1>
@@ -114,6 +263,11 @@ export const KanbanBoard = ({ onLogout }: KanbanBoardProps) => {
                 Keep momentum visible. Rename columns, drag cards between stages,
                 and capture quick notes without getting buried in settings.
               </p>
+              {saveError ? (
+                <p className="mt-3 text-sm font-semibold text-[var(--secondary-purple)]">
+                  {saveError}
+                </p>
+              ) : null}
             </div>
             <div className="rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-5 py-4">
               <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">

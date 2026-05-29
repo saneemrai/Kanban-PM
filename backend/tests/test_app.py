@@ -18,8 +18,13 @@ def make_client(tmp_path: Path) -> TestClient:
     return TestClient(create_app(static_dir, tmp_path / "pm.sqlite3"))
 
 
-def auth_headers() -> dict[str, str]:
-    return {"X-PM-User": "user"}
+def login(client: TestClient) -> dict[str, str]:
+    response = client.post(
+        "/api/login",
+        json={"username": "user", "password": "password"},
+    )
+    assert response.status_code == 200
+    return {"X-PM-Session": response.json()["sessionToken"]}
 
 
 def test_health_api_returns_ok(tmp_path: Path) -> None:
@@ -51,25 +56,60 @@ def test_database_initialization_creates_seed_board(tmp_path: Path) -> None:
         board_count = connection.execute("SELECT COUNT(*) FROM boards").fetchone()[0]
         column_count = connection.execute("SELECT COUNT(*) FROM columns").fetchone()[0]
         card_count = connection.execute("SELECT COUNT(*) FROM cards").fetchone()[0]
+        session_count = connection.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
 
     assert user_count == 1
     assert board_count == 1
     assert column_count == 5
     assert card_count == 8
+    assert session_count == 0
 
 
 def test_board_api_requires_user_session(tmp_path: Path) -> None:
     client = make_client(tmp_path)
 
     missing_response = client.get("/api/board")
-    invalid_response = client.get("/api/board", headers={"X-PM-User": "someone"})
+    invalid_response = client.get("/api/board", headers={"X-PM-Session": "bad"})
 
     assert missing_response.status_code == 401
     assert invalid_response.status_code == 401
 
 
+def test_login_rejects_invalid_credentials(tmp_path: Path) -> None:
+    response = make_client(tmp_path).post(
+        "/api/login",
+        json={"username": "user", "password": "wrong"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_second_login_invalidates_first_session(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    first_headers = login(client)
+    second_headers = login(client)
+
+    first_response = client.get("/api/session", headers=first_headers)
+    second_response = client.get("/api/session", headers=second_headers)
+
+    assert first_response.status_code == 401
+    assert second_response.status_code == 200
+
+
+def test_logout_invalidates_session(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+
+    logout_response = client.post("/api/logout", headers=headers)
+    board_response = client.get("/api/board", headers=headers)
+
+    assert logout_response.status_code == 200
+    assert board_response.status_code == 401
+
+
 def test_board_api_returns_seed_board(tmp_path: Path) -> None:
-    response = make_client(tmp_path).get("/api/board", headers=auth_headers())
+    client = make_client(tmp_path)
+    response = client.get("/api/board", headers=login(client))
 
     assert response.status_code == 200
     assert response.json() == DEFAULT_BOARD.model_dump()
@@ -81,7 +121,8 @@ def test_board_api_updates_and_persists_board(tmp_path: Path) -> None:
     write_static_index(static_dir)
     client = TestClient(create_app(static_dir, db_path))
 
-    board = client.get("/api/board", headers=auth_headers()).json()
+    headers = login(client)
+    board = client.get("/api/board", headers=headers).json()
     board["columns"][0]["title"] = "Ideas"
     board["columns"][0]["cardIds"].remove("card-2")
     board["columns"][4]["cardIds"].append("card-2")
@@ -94,9 +135,9 @@ def test_board_api_updates_and_persists_board(tmp_path: Path) -> None:
     del board["cards"]["card-8"]
     board["columns"][4]["cardIds"].remove("card-8")
 
-    update_response = client.put("/api/board", json=board, headers=auth_headers())
+    update_response = client.put("/api/board", json=board, headers=headers)
     next_client = TestClient(create_app(static_dir, db_path))
-    persisted_response = next_client.get("/api/board", headers=auth_headers())
+    persisted_response = next_client.get("/api/board", headers=headers)
 
     assert update_response.status_code == 200
     assert persisted_response.status_code == 200
@@ -109,9 +150,10 @@ def test_board_api_updates_and_persists_board(tmp_path: Path) -> None:
 
 def test_board_api_rejects_invalid_board_payload(tmp_path: Path) -> None:
     client = make_client(tmp_path)
-    board = client.get("/api/board", headers=auth_headers()).json()
+    headers = login(client)
+    board = client.get("/api/board", headers=headers).json()
     board["columns"] = board["columns"][:-1]
 
-    response = client.put("/api/board", json=board, headers=auth_headers())
+    response = client.put("/api/board", json=board, headers=headers)
 
     assert response.status_code == 422

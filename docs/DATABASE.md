@@ -1,6 +1,6 @@
 # Database design
 
-The MVP will use SQLite with normalized tables for users, boards, columns, and cards. The backend can still expose simple full-board API responses shaped like the current frontend `BoardData`, but the database should store the Kanban structure relationally.
+The MVP will use SQLite with normalized tables for users, sessions, boards, columns, and cards. The backend can still expose simple full-board API responses shaped like the current frontend `BoardData`, but the database should store the Kanban structure relationally.
 
 ## Database file
 
@@ -12,7 +12,7 @@ Recommended path:
 backend/data/pm.sqlite3
 ```
 
-When running in Docker, this path can later be mounted as a volume if persistence outside the container is needed.
+When running in Docker, the start scripts mount `backend/data` to `/app/backend/data` so SQLite data persists across container restarts.
 
 ## Tables
 
@@ -59,6 +59,13 @@ CREATE TABLE IF NOT EXISTS cards (
   FOREIGN KEY (board_id, column_key) REFERENCES columns (board_id, key),
   UNIQUE (board_id, column_key, position)
 );
+
+CREATE TABLE IF NOT EXISTS sessions (
+  user_id INTEGER PRIMARY KEY,
+  token TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users (id)
+);
 ```
 
 ## MVP user
@@ -71,6 +78,16 @@ password: password
 ```
 
 The password does not need to be stored for the MVP because authentication is hardcoded. The database only needs the `users.username` row so the board can belong to a user and the schema can support multiple users later.
+
+## Sessions
+
+The backend stores one active session token per user:
+
+```sql
+PRIMARY KEY (sessions.user_id)
+```
+
+Creating a new session replaces the user's previous token. This prevents the same MVP user from keeping two valid browser sessions open at the same time.
 
 ## Board ownership
 
@@ -162,17 +179,19 @@ On backend startup or first database access:
 
 ## Updates
 
-Part 6 can still keep the API simple:
+The API stays simple:
 
 ```text
+POST /api/login
+POST /api/logout
 GET /api/board
 PUT /api/board
 ```
 
-Both routes require the MVP user header:
+Board routes require the MVP session header returned by `POST /api/login`:
 
 ```text
-X-PM-User: user
+X-PM-Session: <session token>
 ```
 
 For `PUT /api/board`, the backend can accept the full `BoardData` shape and update normalized rows in a transaction:

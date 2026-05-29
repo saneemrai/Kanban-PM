@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import type { Card, Column } from "@/lib/kanban";
+import { columnEndDropId, type Card, type Column } from "@/lib/kanban";
 import { KanbanCard } from "@/components/KanbanCard";
 import { NewCardForm } from "@/components/NewCardForm";
 
@@ -21,6 +21,10 @@ export const KanbanColumn = ({
   onDeleteCard,
 }: KanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
+  const { setNodeRef: setEndDropRef, isOver: isEndOver } = useDroppable({
+    id: columnEndDropId(column.id),
+  });
+  const cardCountLabel = `${cards.length} ${cards.length === 1 ? "card" : "cards"}`;
 
   return (
     <section
@@ -36,7 +40,7 @@ export const KanbanColumn = ({
           <div className="flex items-center gap-3">
             <div className="h-2 w-10 rounded-full bg-[var(--accent-yellow)]" />
             <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
-              {cards.length} cards
+              {cardCountLabel}
             </span>
           </div>
           <input
@@ -62,6 +66,14 @@ export const KanbanColumn = ({
             Drop a card here
           </div>
         )}
+        <div
+          ref={setEndDropRef}
+          className={clsx(
+            "min-h-10 rounded-2xl border border-dashed border-transparent transition",
+            isEndOver && "border-[var(--accent-yellow)] bg-[rgba(236,173,10,0.08)]"
+          )}
+          data-testid={`drop-end-${column.id}`}
+        />
       </div>
       <NewCardForm
         onAdd={(title, details) => onAddCard(column.id, title, details)}

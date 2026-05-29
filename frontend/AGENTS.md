@@ -29,15 +29,17 @@ This directory contains the existing frontend-only Kanban demo for the Project M
 
 ## Current behavior
 
-- The app is a frontend-only demo behind a local MVP sign in screen.
+- The app is a Kanban board behind an MVP sign in screen.
 - Sign in accepts only username `user` and password `password`.
-- The MVP session is stored in browser `localStorage`.
-- Board data starts from `initialData` in `src/lib/kanban.ts`.
-- Board changes are stored only in React state and are lost on refresh.
+- The MVP session token is stored in browser `localStorage`.
+- A new sign in invalidates the same user's previous session token.
+- After sign in, board data is loaded from `/api/board`.
+- Board changes are saved back to `/api/board`.
+- Component tests may still render `KanbanBoard` without a session token, which uses `initialData` as a local fallback.
 - The board has five fixed columns.
 - Column titles can be renamed.
 - Cards can be added, removed, reordered, and moved across columns.
-- There is no backend API, persistence, or AI chat yet.
+- There is no AI chat yet.
 - NextJS is configured for static export so the Docker build can serve `frontend/out` from FastAPI.
 
 ## Scripts
@@ -61,12 +63,13 @@ npm run test:all
 - Existing Playwright config starts the Next dev server on `127.0.0.1:3000`.
 - Set `PLAYWRIGHT_BASE_URL` to run the same Playwright tests against an already running app, such as the Docker-served app on `http://127.0.0.1:8000`.
 - Existing Playwright board tests sign in before asserting the board.
-- When backend persistence is added, include refresh-based tests that prove board changes are saved.
+- Keep refresh-based tests that prove board changes are saved.
 
 ## Implementation guidance
 
 - Keep board shape compatible with `BoardData` unless the database design explicitly changes it.
-- Keep API calls same-origin under `/api/*` once the FastAPI backend is serving the static frontend.
+- Keep API calls same-origin under `/api/*`.
+- The board API uses the MVP `X-PM-Session` header returned from `/api/login`.
 - Preserve the current color variables from `src/app/globals.css` unless the root project instructions change.
 - Keep the MVP simple: do not add registration, multiple boards, model selection, chat streaming, or extra settings unless requested.
 - Prefer focused changes to the existing components over broad redesigns.

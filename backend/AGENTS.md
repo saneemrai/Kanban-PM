@@ -12,8 +12,7 @@ This directory contains the FastAPI backend for the Project Management MVP.
 
 ## Structure
 
-- `app/main.py` defines the FastAPI app, `/api/health`, and temporary static page serving for Part 2.
-- `app/static/index.html` is the temporary HTML page used before the real frontend is statically built and served.
+- `app/main.py` defines the FastAPI app, `/api/health`, session routes, board routes, and static frontend serving.
 - `tests/` contains backend tests.
 - `pyproject.toml` defines backend dependencies and test configuration.
 
@@ -21,10 +20,13 @@ This directory contains the FastAPI backend for the Project Management MVP.
 
 - `GET /` serves the static frontend build in Docker.
 - `GET /api/health` returns a JSON health response.
+- `POST /api/login` accepts the MVP `user` / `password` credentials and returns a session token.
+- `POST /api/logout` invalidates the current session token.
 - `GET /api/board` returns the current user's Kanban board.
 - `PUT /api/board` replaces the current user's Kanban board.
-- Board persistence uses SQLite with normalized users, boards, columns, and cards tables.
-- Board API routes require the MVP `X-PM-User: user` header.
+- Board persistence uses SQLite with normalized users, sessions, boards, columns, and cards tables.
+- Board API routes require the MVP `X-PM-Session` header.
+- A new login replaces that user's previous session, so only one browser can be signed in for the MVP user at a time.
 - There is no AI integration yet.
 
 ## Commands

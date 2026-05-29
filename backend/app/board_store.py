@@ -1,12 +1,14 @@
 from pathlib import Path
 import sqlite3
 from typing import Any
+from uuid import uuid4
 
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[1] / "data" / "pm.sqlite3"
 MVP_USERNAME = "user"
+MVP_PASSWORD = "password"
 FIXED_COLUMN_IDS = [
     "col-backlog",
     "col-discovery",
@@ -37,6 +39,13 @@ class BoardData(BaseModel):
 
     columns: list[Column]
     cards: dict[str, Card]
+
+
+class LoginPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    username: str
+    password: str
 
 
 DEFAULT_COLUMNS = [
@@ -147,9 +156,61 @@ def initialize_database(db_path: Path) -> None:
               FOREIGN KEY (board_id, column_key) REFERENCES columns (board_id, key),
               UNIQUE (board_id, column_key, position)
             );
+
+            CREATE TABLE IF NOT EXISTS sessions (
+              user_id INTEGER PRIMARY KEY,
+              token TEXT NOT NULL UNIQUE,
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              FOREIGN KEY (user_id) REFERENCES users (id)
+            );
             """
         )
         ensure_user_board(connection, MVP_USERNAME)
+
+
+def create_session(db_path: Path, username: str, password: str) -> str:
+    if username != MVP_USERNAME or password != MVP_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid credentials.")
+
+    with connect(db_path) as connection:
+        user_id = ensure_user_board(connection, username)
+        token = uuid4().hex
+        connection.execute(
+            """
+            INSERT INTO sessions (user_id, token)
+            VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+              token = excluded.token,
+              created_at = CURRENT_TIMESTAMP
+            """,
+            (user_id, token),
+        )
+    return token
+
+
+def delete_session(db_path: Path, token: str) -> None:
+    with connect(db_path) as connection:
+        connection.execute("DELETE FROM sessions WHERE token = ?", (token,))
+
+
+def get_username_for_session(db_path: Path, token: str | None) -> str:
+    if token is None:
+        raise HTTPException(status_code=401, detail="Missing user session.")
+
+    with connect(db_path) as connection:
+        row = connection.execute(
+            """
+            SELECT users.username
+            FROM sessions
+            JOIN users ON users.id = sessions.user_id
+            WHERE sessions.token = ?
+            """,
+            (token,),
+        ).fetchone()
+
+    if row is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired user session.")
+    return row["username"]
 
 
 def ensure_user_board(connection: sqlite3.Connection, username: str) -> int:

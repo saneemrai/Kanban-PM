@@ -22,6 +22,8 @@ bash scripts/start-linux.sh
 
 Open `http://127.0.0.1:8000`.
 
+SQLite data is stored under `backend/data`.
+
 ## Stop locally
 
 Windows:

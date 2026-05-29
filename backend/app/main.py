@@ -1,25 +1,20 @@
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header
 from fastapi.staticfiles import StaticFiles
 
 from app.board_store import (
     DEFAULT_DB_PATH,
-    MVP_USERNAME,
+    LoginPayload,
+    create_session,
+    delete_session,
+    get_username_for_session,
     initialize_database,
     get_board,
     save_board,
 )
 
 STATIC_DIR = Path(__file__).parent / "static"
-
-
-def get_current_username(x_pm_user: str | None = Header(default=None)) -> str:
-    if x_pm_user is None:
-        raise HTTPException(status_code=401, detail="Missing user session.")
-    if x_pm_user != MVP_USERNAME:
-        raise HTTPException(status_code=401, detail="Invalid user session.")
-    return x_pm_user
 
 
 def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -> FastAPI:
@@ -30,16 +25,39 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
     def health() -> dict[str, str]:
         return {"status": "ok", "service": "project-management-api"}
 
-    @app.get("/api/board")
-    def read_board(x_pm_user: str | None = Header(default=None)):
-        username = get_current_username(x_pm_user)
+    @app.post("/api/login")
+    def login(payload: LoginPayload):
         initialize_database(app.state.db_path)
+        token = create_session(
+            app.state.db_path,
+            payload.username,
+            payload.password,
+        )
+        return {"username": payload.username, "sessionToken": token}
+
+    @app.post("/api/logout")
+    def logout(x_pm_session: str | None = Header(default=None)):
+        initialize_database(app.state.db_path)
+        if x_pm_session is not None:
+            delete_session(app.state.db_path, x_pm_session)
+        return {"status": "ok"}
+
+    @app.get("/api/session")
+    def read_session(x_pm_session: str | None = Header(default=None)):
+        initialize_database(app.state.db_path)
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        return {"username": username}
+
+    @app.get("/api/board")
+    def read_board(x_pm_session: str | None = Header(default=None)):
+        initialize_database(app.state.db_path)
+        username = get_username_for_session(app.state.db_path, x_pm_session)
         return get_board(app.state.db_path, username).model_dump()
 
     @app.put("/api/board")
-    def update_board(payload: dict, x_pm_user: str | None = Header(default=None)):
-        username = get_current_username(x_pm_user)
+    def update_board(payload: dict, x_pm_session: str | None = Header(default=None)):
         initialize_database(app.state.db_path)
+        username = get_username_for_session(app.state.db_path, x_pm_session)
         return save_board(app.state.db_path, username, payload).model_dump()
 
     app.mount(

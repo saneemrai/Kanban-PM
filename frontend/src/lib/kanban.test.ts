@@ -1,4 +1,4 @@
-import { moveCard, type Column } from "@/lib/kanban";
+import { columnEndDropId, moveCard, type Column } from "@/lib/kanban";
 
 describe("moveCard", () => {
   const baseColumns: Column[] = [
@@ -11,6 +11,11 @@ describe("moveCard", () => {
     expect(result[0].cardIds).toEqual(["card-2", "card-1"]);
   });
 
+  it("reorders cards after a target card in the same column", () => {
+    const result = moveCard(baseColumns, "card-1", "card-2", "after");
+    expect(result[0].cardIds).toEqual(["card-2", "card-1"]);
+  });
+
   it("moves cards to another column", () => {
     const result = moveCard(baseColumns, "card-2", "card-3");
     expect(result[0].cardIds).toEqual(["card-1"]);
@@ -19,6 +24,18 @@ describe("moveCard", () => {
 
   it("drops cards to the end of a column", () => {
     const result = moveCard(baseColumns, "card-1", "col-b");
+    expect(result[0].cardIds).toEqual(["card-2"]);
+    expect(result[1].cardIds).toEqual(["card-3", "card-1"]);
+  });
+
+  it("drops cards to a column end target", () => {
+    const result = moveCard(baseColumns, "card-1", columnEndDropId("col-b"));
+    expect(result[0].cardIds).toEqual(["card-2"]);
+    expect(result[1].cardIds).toEqual(["card-3", "card-1"]);
+  });
+
+  it("moves cards after a target card in another column", () => {
+    const result = moveCard(baseColumns, "card-1", "card-3", "after");
     expect(result[0].cardIds).toEqual(["card-2"]);
     expect(result[1].cardIds).toEqual(["card-3", "card-1"]);
   });

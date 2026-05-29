@@ -164,21 +164,21 @@ Success criteria:
 Goal: connect the frontend Kanban UI to the backend API so the board is persistent.
 
 Checklist:
-- [ ] Replace local-only initial board state with API loading after sign in.
-- [ ] Save column renames to the backend.
-- [ ] Save card creation to the backend.
-- [ ] Save card deletion to the backend.
-- [ ] Save drag and drop moves to the backend.
-- [ ] Add simple loading and error states.
-- [ ] Keep the UI responsive and avoid broad redesign work.
-- [ ] Ensure static frontend API calls use the same origin under `/api/*`.
+- [x] Replace local-only initial board state with API loading after sign in.
+- [x] Save column renames to the backend.
+- [x] Save card creation to the backend.
+- [x] Save card deletion to the backend.
+- [x] Save drag and drop moves to the backend.
+- [x] Add simple loading and error states.
+- [x] Keep the UI responsive and avoid broad redesign work.
+- [x] Ensure static frontend API calls use the same origin under `/api/*`.
 
 Tests:
-- [ ] Frontend unit/component tests for API-backed board loading and updates.
-- [ ] Playwright test verifies sign in, board load, edit, refresh, and persistence.
-- [ ] Playwright test verifies drag and drop persistence after refresh.
-- [ ] Backend tests continue to pass.
-- [ ] Docker-served integration flow works locally.
+- [x] Frontend unit/component tests for API-backed board loading and updates.
+- [x] Playwright test verifies sign in, board load, edit, refresh, and persistence.
+- [x] Playwright test verifies drag and drop persistence after refresh.
+- [x] Backend tests continue to pass.
+- [x] Docker-served integration flow works locally.
 
 Success criteria:
 - The board persists after browser refresh.
