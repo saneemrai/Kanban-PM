@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI, Header
 from fastapi.staticfiles import StaticFiles
 
+from app.ai_client import OPENROUTER_MODEL, call_openrouter
 from app.board_store import (
     DEFAULT_DB_PATH,
     LoginPayload,
@@ -24,6 +25,13 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
     @app.get("/api/health")
     def health() -> dict[str, str]:
         return {"status": "ok", "service": "project-management-api"}
+
+    @app.post("/api/ai/test")
+    def test_ai_connectivity() -> dict[str, str]:
+        return {
+            "model": OPENROUTER_MODEL,
+            "response": call_openrouter(),
+        }
 
     @app.post("/api/login")
     def login(payload: LoginPayload):

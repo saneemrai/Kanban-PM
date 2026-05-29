@@ -1,8 +1,10 @@
 from pathlib import Path
 import sqlite3
 
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from app.ai_client import OPENROUTER_MODEL, build_openrouter_request
 from app.board_store import DEFAULT_BOARD, initialize_database
 from app.main import create_app
 
@@ -35,6 +37,41 @@ def test_health_api_returns_ok(tmp_path: Path) -> None:
         "status": "ok",
         "service": "project-management-api",
     }
+
+
+def test_ai_client_uses_openrouter_model() -> None:
+    request = build_openrouter_request("What is 2+2?")
+
+    assert request["model"] == OPENROUTER_MODEL
+    assert request["messages"] == [{"role": "user", "content": "What is 2+2?"}]
+    assert request["temperature"] == 0
+
+
+def test_ai_connectivity_route_returns_response(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.main.call_openrouter", lambda: "4")
+
+    response = make_client(tmp_path).post("/api/ai/test")
+
+    assert response.status_code == 200
+    assert response.json() == {"model": OPENROUTER_MODEL, "response": "4"}
+
+
+def test_ai_connectivity_route_returns_upstream_error(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    def fail_openrouter() -> str:
+        raise HTTPException(status_code=502, detail="OpenRouter returned an error.")
+
+    monkeypatch.setattr("app.main.call_openrouter", fail_openrouter)
+
+    response = make_client(tmp_path).post("/api/ai/test")
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "OpenRouter returned an error."}
 
 
 def test_root_serves_static_frontend(tmp_path: Path) -> None:

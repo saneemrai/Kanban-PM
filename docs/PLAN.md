@@ -190,23 +190,23 @@ Success criteria:
 Goal: prove the backend can call OpenRouter with the configured model.
 
 Checklist:
-- [ ] Read `OPENROUTER_API_KEY` from the project-root `.env`.
-- [ ] Use OpenRouter with model `openai/gpt-oss-120b`.
-- [ ] Add a minimal backend AI route or test utility for connectivity.
-- [ ] Run a simple `2+2` connectivity check.
-- [ ] Keep secrets out of logs, code, and committed files.
-- [ ] Document required environment variable names concisely.
+- [x] Read `OPENROUTER_API_KEY` from the project-root `.env`.
+- [x] Use OpenRouter with model `openai/gpt-oss-120b`.
+- [x] Add a minimal backend AI route or test utility for connectivity.
+- [x] Run a simple `2+2` connectivity check.
+- [x] Keep secrets out of logs, code, and committed files.
+- [x] Document required environment variable names concisely.
 
 Tests:
-- [ ] Unit test verifies AI client configuration without making a network call.
-- [ ] Mocked backend test verifies the AI route handles a successful response.
-- [ ] Mocked backend test verifies an upstream AI error returns a clear backend error.
-- [ ] Manual or explicitly marked integration test verifies the real `2+2` OpenRouter call when an API key is available.
+- [x] Unit test verifies AI client configuration without making a network call.
+- [x] Mocked backend test verifies the AI route handles a successful response.
+- [x] Mocked backend test verifies an upstream AI error returns a clear backend error.
+- [x] Manual or explicitly marked integration test verifies the real `2+2` OpenRouter call when an API key is available.
 
 Success criteria:
-- Backend AI client is configured for OpenRouter.
-- A real connectivity check can succeed with the project-root `.env` key.
-- Normal automated tests do not require live OpenRouter access.
+- [x] Backend AI client is configured for OpenRouter.
+- [x] A real connectivity check can succeed with the project-root `.env` key.
+- [x] Normal automated tests do not require live OpenRouter access.
 
 ## Part 9: AI Board Updates
 
