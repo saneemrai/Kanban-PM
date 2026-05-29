@@ -1,18 +1,25 @@
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 STATIC_DIR = Path(__file__).parent / "static"
 
-app = FastAPI(title="Project Management API")
+
+def create_app(static_dir: Path = STATIC_DIR) -> FastAPI:
+    app = FastAPI(title="Project Management API")
+
+    @app.get("/api/health")
+    def health() -> dict[str, str]:
+        return {"status": "ok", "service": "project-management-api"}
+
+    app.mount(
+        "/",
+        StaticFiles(directory=static_dir, html=True),
+        name="static",
+    )
+
+    return app
 
 
-@app.get("/api/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": "project-management-api"}
-
-
-@app.get("/", include_in_schema=False)
-def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+app = create_app()

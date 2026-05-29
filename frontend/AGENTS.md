@@ -15,6 +15,7 @@ This directory contains the existing frontend-only Kanban demo for the Project M
 ## Structure
 
 - `src/app/page.tsx` renders the Kanban board.
+- `src/components/AuthenticatedApp.tsx` owns the MVP sign in/logout state.
 - `src/app/layout.tsx` defines metadata and loads Google fonts.
 - `src/app/globals.css` contains Tailwind import, theme variables, and global styles.
 - `src/components/KanbanBoard.tsx` owns the current in-memory board state and drag/drop handlers.
@@ -28,13 +29,16 @@ This directory contains the existing frontend-only Kanban demo for the Project M
 
 ## Current behavior
 
-- The app is a frontend-only demo.
+- The app is a frontend-only demo behind a local MVP sign in screen.
+- Sign in accepts only username `user` and password `password`.
+- The MVP session is stored in browser `localStorage`.
 - Board data starts from `initialData` in `src/lib/kanban.ts`.
 - Board changes are stored only in React state and are lost on refresh.
 - The board has five fixed columns.
 - Column titles can be renamed.
 - Cards can be added, removed, reordered, and moved across columns.
-- There is no sign in, backend API, persistence, or AI chat yet.
+- There is no backend API, persistence, or AI chat yet.
+- NextJS is configured for static export so the Docker build can serve `frontend/out` from FastAPI.
 
 ## Scripts
 
@@ -55,7 +59,8 @@ npm run test:all
 - Use Vitest for pure logic and component behavior under `src/**/*.{test,spec}.{ts,tsx}`.
 - Use Playwright for browser-level flows under `tests/`.
 - Existing Playwright config starts the Next dev server on `127.0.0.1:3000`.
-- When authentication is added, update existing Playwright tests to sign in before asserting the board.
+- Set `PLAYWRIGHT_BASE_URL` to run the same Playwright tests against an already running app, such as the Docker-served app on `http://127.0.0.1:8000`.
+- Existing Playwright board tests sign in before asserting the board.
 - When backend persistence is added, include refresh-based tests that prove board changes are saved.
 
 ## Implementation guidance

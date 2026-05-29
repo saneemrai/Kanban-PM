@@ -58,20 +58,20 @@ Success criteria:
 Goal: statically build the existing NextJS frontend and serve it from FastAPI at `/`.
 
 Checklist:
-- [ ] Review the current frontend build output options.
-- [ ] Configure NextJS for static export if required.
-- [ ] Update Docker build steps to install frontend dependencies and build the static site.
-- [ ] Copy the frontend static output into the backend-served static directory.
-- [ ] Replace the temporary static HTML with the built Kanban app.
-- [ ] Preserve the current Kanban behavior: five columns, rename columns, add cards, remove cards, drag and drop cards.
-- [ ] Keep API routes under `/api/*` so they do not conflict with static frontend routing.
+- [x] Review the current frontend build output options.
+- [x] Configure NextJS for static export if required.
+- [x] Update Docker build steps to install frontend dependencies and build the static site.
+- [x] Copy the frontend static output into the backend-served static directory.
+- [x] Replace the temporary static HTML with the built Kanban app.
+- [x] Preserve the current Kanban behavior: five columns, rename columns, add cards, remove cards, drag and drop cards.
+- [x] Keep API routes under `/api/*` so they do not conflict with static frontend routing.
 
 Tests:
-- [ ] Run frontend unit/component tests with Vitest.
-- [ ] Run frontend Playwright tests against the frontend in development mode.
-- [ ] Add or update an integration test that verifies FastAPI serves the built frontend at `/`.
-- [ ] Run Docker build and confirm the container serves the built frontend.
-- [ ] Run Playwright against the Docker-served app if practical.
+- [x] Run frontend unit/component tests with Vitest.
+- [x] Run frontend Playwright tests against the frontend in development mode.
+- [x] Add or update an integration test that verifies FastAPI serves the built frontend at `/`.
+- [x] Run Docker build and confirm the container serves the built frontend.
+- [x] Run Playwright against the Docker-served app if practical.
 
 Success criteria:
 - Loading `/` from the Docker container shows the Kanban board.
@@ -84,21 +84,21 @@ Success criteria:
 Goal: require a local MVP sign in before showing the Kanban board.
 
 Checklist:
-- [ ] Add a sign in screen at `/` when no user session is active.
-- [ ] Accept only username `user` and password `password`.
-- [ ] Store the MVP session in the simplest appropriate local mechanism.
-- [ ] Show the Kanban board after successful sign in.
-- [ ] Add a logout control that returns the user to the sign in screen.
-- [ ] Keep the database model ready for multiple users later, even though only one hardcoded user can sign in now.
-- [ ] Avoid adding user registration, password reset, roles, or other non-MVP auth features.
+- [x] Add a sign in screen at `/` when no user session is active.
+- [x] Accept only username `user` and password `password`.
+- [x] Store the MVP session in the simplest appropriate local mechanism.
+- [x] Show the Kanban board after successful sign in.
+- [x] Add a logout control that returns the user to the sign in screen.
+- [x] Keep the database model ready for multiple users later, even though only one hardcoded user can sign in now.
+- [x] Avoid adding user registration, password reset, roles, or other non-MVP auth features.
 
 Tests:
-- [ ] Unit/component test verifies sign in form validation and successful sign in.
-- [ ] Unit/component test verifies logout.
-- [ ] Playwright test verifies `/` initially shows sign in.
-- [ ] Playwright test verifies invalid credentials are rejected.
-- [ ] Playwright test verifies valid credentials show the Kanban board.
-- [ ] Playwright test verifies logout returns to sign in.
+- [x] Unit/component test verifies sign in form validation and successful sign in.
+- [x] Unit/component test verifies logout.
+- [x] Playwright test verifies `/` initially shows sign in.
+- [x] Playwright test verifies invalid credentials are rejected.
+- [x] Playwright test verifies valid credentials show the Kanban board.
+- [x] Playwright test verifies logout returns to sign in.
 
 Success criteria:
 - Anonymous users cannot see the board.

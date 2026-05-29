@@ -1,9 +1,11 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
-from app.main import app
+from app.main import create_app
 
 
-client = TestClient(app)
+client = TestClient(create_app())
 
 
 def test_health_api_returns_ok() -> None:
@@ -16,10 +18,11 @@ def test_health_api_returns_ok() -> None:
     }
 
 
-def test_root_serves_temporary_html() -> None:
-    response = client.get("/")
+def test_root_serves_static_frontend(tmp_path: Path) -> None:
+    (tmp_path / "index.html").write_text("<h1>Kanban Studio</h1>", encoding="utf-8")
+
+    response = TestClient(create_app(tmp_path)).get("/")
 
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert "Project Management MVP" in response.text
-    assert "/api/health" in response.text
+    assert "Kanban Studio" in response.text
