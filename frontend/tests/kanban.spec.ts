@@ -4,6 +4,34 @@ import { initialData, type BoardData } from "../src/lib/kanban";
 const cloneBoard = () => JSON.parse(JSON.stringify(initialData)) as BoardData;
 
 const setupBoardApi = async (page: Page) => {
+  let board = cloneBoard();
+  await page.route("**/api/ai/chat", async (route) => {
+    const nextBoard = {
+      ...board,
+      columns: board.columns.map((column) =>
+        column.id === "col-backlog"
+          ? { ...column, cardIds: [...column.cardIds, "card-ai"] }
+          : column
+      ),
+      cards: {
+        ...board.cards,
+        "card-ai": {
+          id: "card-ai",
+          title: "AI-created launch checklist",
+          details: "Added by the mocked AI response.",
+        },
+      },
+    };
+    board = nextBoard;
+    await route.fulfill({
+      json: {
+        message: "I added a launch checklist card.",
+        boardChanged: true,
+        board: nextBoard,
+      },
+    });
+  });
+
   if (process.env.PLAYWRIGHT_BASE_URL) {
     const loginResponse = await page.request.post("/api/login", {
       data: { username: "user", password: "password" },
@@ -16,7 +44,6 @@ const setupBoardApi = async (page: Page) => {
     return;
   }
 
-  let board = cloneBoard();
   let sessionToken = "";
   await page.route("**/api/board", async (route) => {
     const request = route.request();
@@ -185,4 +212,14 @@ test("expires the current browser when the user signs in elsewhere", async ({
     page.getByText("Signed out because this user signed in somewhere else.")
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+});
+
+test("uses AI chat to update the board", async ({ page }) => {
+  await signIn(page);
+
+  await page.getByLabel("Message").fill("Add a launch checklist card.");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  await expect(page.getByText("I added a launch checklist card.")).toBeVisible();
+  await expect(page.getByText("AI-created launch checklist")).toBeVisible();
 });

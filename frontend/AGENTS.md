@@ -19,6 +19,7 @@ This directory contains the existing frontend-only Kanban demo for the Project M
 - `src/app/layout.tsx` defines metadata and loads Google fonts.
 - `src/app/globals.css` contains Tailwind import, theme variables, and global styles.
 - `src/components/KanbanBoard.tsx` owns the current in-memory board state and drag/drop handlers.
+- `src/components/AiChatSidebar.tsx` owns the active session's frontend chat history and calls `/api/ai/chat`.
 - `src/components/KanbanColumn.tsx` renders one droppable column, the editable column title, cards, and new card form.
 - `src/components/KanbanCard.tsx` renders a sortable card and delete button.
 - `src/components/KanbanCardPreview.tsx` renders the drag overlay preview.
@@ -39,7 +40,7 @@ This directory contains the existing frontend-only Kanban demo for the Project M
 - The board has five fixed columns.
 - Column titles can be renamed.
 - Cards can be added, removed, reordered, and moved across columns.
-- There is no AI chat yet.
+- The AI chat sidebar can send messages and apply board updates returned by the backend.
 - NextJS is configured for static export so the Docker build can serve `frontend/out` from FastAPI.
 
 ## Scripts
@@ -64,6 +65,7 @@ npm run test:all
 - Set `PLAYWRIGHT_BASE_URL` to run the same Playwright tests against an already running app, such as the Docker-served app on `http://127.0.0.1:8000`.
 - Existing Playwright board tests sign in before asserting the board.
 - Keep refresh-based tests that prove board changes are saved.
+- Mock AI chat responses in frontend tests; do not require live OpenRouter access from frontend test runs.
 
 ## Implementation guidance
 

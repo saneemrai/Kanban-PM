@@ -88,4 +88,74 @@ describe("KanbanBoard", () => {
     );
     expect(screen.getByText("API card")).toBeInTheDocument();
   });
+
+  it("shows AI chat responses without changing the board", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (input === "/api/ai/chat") {
+        return Response.json({
+          message: "The board is already in good shape.",
+          boardChanged: false,
+          board: null,
+        });
+      }
+      return Response.json(initialData);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<KanbanBoard sessionToken="session-1" />);
+
+    await screen.findByRole("heading", { name: "Kanban Studio" });
+    await userEvent.type(screen.getByLabelText("Message"), "Summarize the board.");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(
+      await screen.findByText("The board is already in good shape.")
+    ).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/ai/chat",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "X-PM-Session": "session-1" }),
+      })
+    );
+  });
+
+  it("applies AI board updates", async () => {
+    const nextBoard: BoardData = {
+      ...initialData,
+      columns: initialData.columns.map((column) =>
+        column.id === "col-backlog"
+          ? { ...column, cardIds: [...column.cardIds, "card-ai"] }
+          : column
+      ),
+      cards: {
+        ...initialData.cards,
+        "card-ai": {
+          id: "card-ai",
+          title: "AI-created card",
+          details: "Added by AI.",
+        },
+      },
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (input === "/api/ai/chat") {
+        return Response.json({
+          message: "Added a card.",
+          boardChanged: true,
+          board: nextBoard,
+        });
+      }
+      return Response.json(initialData);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<KanbanBoard sessionToken="session-1" />);
+
+    await screen.findByRole("heading", { name: "Kanban Studio" });
+    await userEvent.type(screen.getByLabelText("Message"), "Add an AI card.");
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("Added a card.")).toBeVisible();
+    expect(screen.getByText("AI-created card")).toBeVisible();
+  });
 });

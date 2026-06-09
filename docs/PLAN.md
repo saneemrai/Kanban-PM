@@ -241,26 +241,26 @@ Success criteria:
 Goal: add the AI chat UI and refresh the Kanban board when the AI changes it.
 
 Checklist:
-- [ ] Add a sidebar chat widget to the Kanban screen.
-- [ ] Support sending user messages and rendering assistant responses.
-- [ ] Keep conversation history in the frontend for the active session.
-- [ ] Call the backend AI chat endpoint with the current message and history.
-- [ ] Show clear pending and error states.
-- [ ] Refresh or replace the board state automatically when the backend reports a board update.
-- [ ] Preserve existing Kanban interactions while the sidebar is present.
-- [ ] Keep the visual style aligned with the defined color scheme and existing frontend.
-- [ ] Avoid non-MVP chat features such as streaming, file upload, multiple conversations, or model selection unless explicitly requested.
+- [x] Add a sidebar chat widget to the Kanban screen.
+- [x] Support sending user messages and rendering assistant responses.
+- [x] Keep conversation history in the frontend for the active session.
+- [x] Call the backend AI chat endpoint with the current message and history.
+- [x] Show clear pending and error states.
+- [x] Refresh or replace the board state automatically when the backend reports a board update.
+- [x] Preserve existing Kanban interactions while the sidebar is present.
+- [x] Keep the visual style aligned with the defined color scheme and existing frontend.
+- [x] Avoid non-MVP chat features such as streaming, file upload, multiple conversations, or model selection unless explicitly requested.
 
 Tests:
-- [ ] Frontend unit/component tests for chat rendering and submit behavior.
-- [ ] Frontend unit/component tests for board refresh after AI update.
-- [ ] Playwright test verifies user can sign in, send chat, receive response, and continue using the board.
-- [ ] Playwright test verifies an AI-created or moved card appears after the mocked AI response.
-- [ ] Backend mocked AI tests continue to pass.
-- [ ] Docker-served end-to-end smoke test passes.
+- [x] Frontend unit/component tests for chat rendering and submit behavior.
+- [x] Frontend unit/component tests for board refresh after AI update.
+- [x] Playwright test verifies user can sign in, send chat, receive response, and continue using the board.
+- [x] Playwright test verifies an AI-created or moved card appears after the mocked AI response.
+- [x] Backend mocked AI tests continue to pass.
+- [x] Docker-served end-to-end smoke test passes.
 
 Success criteria:
-- The sidebar supports a complete AI chat loop.
-- The AI can update the persisted Kanban board through the backend.
-- The UI refreshes automatically after AI updates.
-- The completed MVP runs locally in Docker.
+- [x] The sidebar supports a complete AI chat loop.
+- [x] The AI can update the persisted Kanban board through the backend.
+- [x] The UI refreshes automatically after AI updates.
+- [x] The completed MVP runs locally in Docker.

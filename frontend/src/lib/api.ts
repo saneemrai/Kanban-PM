@@ -14,6 +14,17 @@ type LoginResponse = {
   sessionToken: string;
 };
 
+export type AiChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type AiChatResponse = {
+  message: string;
+  boardChanged: boolean;
+  board: BoardData | null;
+};
+
 const sessionHeaders = (sessionToken: string) => ({
   "X-PM-Session": sessionToken,
 });
@@ -73,6 +84,22 @@ export const saveBoard = async (
       "Content-Type": "application/json",
     },
     body: JSON.stringify(board),
+  });
+  return parseResponse(response);
+};
+
+export const sendAiChatMessage = async (
+  sessionToken: string,
+  message: string,
+  history: AiChatMessage[]
+): Promise<AiChatResponse> => {
+  const response = await fetch("/api/ai/chat", {
+    method: "POST",
+    headers: {
+      ...sessionHeaders(sessionToken),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ message, history }),
   });
   return parseResponse(response);
 };
