@@ -82,9 +82,11 @@ export const AiChatSidebar = ({
             type="button"
             onClick={onClose}
             aria-label="Close chat"
-            className="rounded-full border border-[var(--stroke)] px-3 py-1 text-xs font-semibold text-[var(--gray-text)] transition hover:text-[var(--navy-dark)]"
+            className="rounded-lg p-2 text-[var(--gray-text)] transition hover:bg-[var(--surface)] hover:text-[var(--navy-dark)]"
           >
-            Close
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M1 1L13 13M13 1L1 13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
           </button>
         ) : null}
       </div>
@@ -103,8 +105,8 @@ export const AiChatSidebar = ({
             key={`${message.role}-${index}`}
             className={
               message.role === "user"
-                ? "ml-6 border border-[var(--primary-blue)] bg-[rgba(32,157,215,0.08)] px-4 py-3 text-sm leading-6 text-[var(--navy-dark)]"
-                : "mr-6 border border-[var(--stroke)] bg-[var(--surface)] px-4 py-3 text-sm leading-6 text-[var(--navy-dark)]"
+                ? "ml-8 rounded-2xl rounded-tr-sm border border-[var(--primary-blue)] bg-[rgba(32,157,215,0.08)] px-4 py-3 text-sm leading-6 text-[var(--navy-dark)]"
+                : "mr-8 rounded-2xl rounded-tl-sm border border-[var(--stroke)] bg-[var(--surface)] px-4 py-3 text-sm leading-6 text-[var(--navy-dark)]"
             }
           >
             {message.content}

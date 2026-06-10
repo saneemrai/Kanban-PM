@@ -1,0 +1,23 @@
+﻿const { chromium } = require('@playwright/test');
+(async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('http://localhost:3000');
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: 'C:\\Users\\saneem\\pm\\verify_login.png' });
+  console.log('login screenshot done');
+  await page.fill('input[type="text"]', 'user');
+  await page.fill('input[type="password"]', 'password');
+  await page.click('button[type="submit"]');
+  await page.waitForTimeout(2000);
+  await page.screenshot({ path: 'C:\\Users\\saneem\\pm\\verify_board.png', fullPage: true });
+  console.log('board screenshot done');
+  const card = page.locator('[data-testid^="card-"]').first();
+  await card.hover();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: 'C:\\Users\\saneem\\pm\\verify_hover.png' });
+  console.log('hover screenshot done');
+  await browser.close();
+  console.log('DONE');
+})().catch(e => { console.error(e.message); process.exit(1); });

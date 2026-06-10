@@ -22,7 +22,7 @@ export const KanbanCard = ({ card, onDelete }: KanbanCardProps) => {
       ref={setNodeRef}
       style={style}
       className={clsx(
-        "rounded-2xl border border-transparent bg-white px-4 py-4 shadow-[0_12px_24px_rgba(3,33,71,0.08)]",
+        "group rounded-2xl border border-transparent bg-white px-4 py-3.5 shadow-[0_12px_24px_rgba(3,33,71,0.08)]",
         "transition-all duration-150",
         isDragging && "opacity-60 shadow-[0_18px_32px_rgba(3,33,71,0.16)]"
       )}
@@ -30,22 +30,25 @@ export const KanbanCard = ({ card, onDelete }: KanbanCardProps) => {
       {...listeners}
       data-testid={`card-${card.id}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h4 className="font-display text-base font-semibold text-[var(--navy-dark)]">
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <h4 className="font-display text-base font-semibold text-[var(--navy-dark)] leading-snug">
             {card.title}
           </h4>
-          <p className="mt-2 text-sm leading-6 text-[var(--gray-text)]">
+          <p className="mt-1.5 text-sm leading-5 text-[var(--gray-text)]">
             {card.details}
           </p>
         </div>
         <button
           type="button"
           onClick={() => onDelete(card.id)}
-          className="rounded-full border border-transparent px-2 py-1 text-xs font-semibold text-[var(--gray-text)] transition hover:border-[var(--stroke)] hover:text-[var(--navy-dark)]"
+          onPointerDown={(e) => e.stopPropagation()}
+          className="mt-0.5 flex-shrink-0 rounded-lg p-1.5 text-[var(--gray-text)] opacity-0 transition-all hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
           aria-label={`Delete ${card.title}`}
         >
-          Remove
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+          </svg>
         </button>
       </div>
     </article>

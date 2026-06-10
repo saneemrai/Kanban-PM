@@ -255,93 +255,83 @@ export const KanbanBoard = ({
       <div className="pointer-events-none absolute left-0 top-0 h-[420px] w-[420px] -translate-x-1/3 -translate-y-1/3 rounded-full bg-[radial-gradient(circle,_rgba(32,157,215,0.25)_0%,_rgba(32,157,215,0.05)_55%,_transparent_70%)]" />
       <div className="pointer-events-none absolute bottom-0 right-0 h-[520px] w-[520px] translate-x-1/4 translate-y-1/4 rounded-full bg-[radial-gradient(circle,_rgba(117,57,145,0.18)_0%,_rgba(117,57,145,0.05)_55%,_transparent_75%)]" />
 
-      <main className="relative mx-auto flex min-h-screen max-w-[1500px] flex-col gap-10 px-6 pb-16 pt-12">
-        <header className="flex flex-col gap-6 rounded-[32px] border border-[var(--stroke)] bg-white/80 p-8 shadow-[var(--shadow)] backdrop-blur">
-          <div className="flex flex-wrap items-start justify-between gap-6">
-            <div>
-              <div className="flex flex-wrap items-center gap-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--gray-text)]">
-                  Single Board Kanban
-                </p>
-                {sessionToken && saveState !== "idle" ? (
-                  <div
-                    className="inline-flex items-center gap-2 rounded-full border border-[var(--stroke)] bg-white px-3 py-1 text-xs font-semibold text-[var(--navy-dark)] shadow-[0_8px_18px_rgba(3,33,71,0.06)]"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    <span
-                      className={
-                        saveState === "saving"
-                          ? "h-2 w-2 rounded-full bg-[var(--primary-blue)]"
-                          : "h-2 w-2 rounded-full bg-[var(--accent-yellow)]"
-                      }
-                    />
-                    {saveStatusLabel}
-                  </div>
-                ) : null}
+      <main className="relative mx-auto flex min-h-screen max-w-[1500px] flex-col gap-6 px-6 pb-10 pt-6">
+        <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--stroke)] bg-white/80 px-6 py-4 shadow-[var(--shadow)] backdrop-blur">
+          <div className="flex items-center gap-3 min-w-0">
+            <h1 className="font-display text-xl font-semibold text-[var(--navy-dark)] whitespace-nowrap">
+              Kanban Studio
+            </h1>
+            {sessionToken && saveState !== "idle" ? (
+              <div
+                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--stroke)] bg-white px-2.5 py-1 text-xs font-semibold text-[var(--navy-dark)] shadow-sm whitespace-nowrap"
+                role="status"
+                aria-live="polite"
+              >
+                <span
+                  className={
+                    saveState === "saving"
+                      ? "h-1.5 w-1.5 rounded-full bg-[var(--primary-blue)]"
+                      : "h-1.5 w-1.5 rounded-full bg-[var(--accent-yellow)]"
+                  }
+                />
+                {saveStatusLabel}
               </div>
-              <h1 className="mt-3 font-display text-4xl font-semibold text-[var(--navy-dark)]">
-                Kanban Studio
-              </h1>
-              <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--gray-text)]">
-                Keep momentum visible. Rename columns, drag cards between stages,
-                and capture quick notes without getting buried in settings.
+            ) : null}
+            {saveError ? (
+              <p className="text-sm font-semibold text-[var(--secondary-purple)]">
+                {saveError}
               </p>
-              {saveError ? (
-                <p className="mt-3 text-sm font-semibold text-[var(--secondary-purple)]">
-                  {saveError}
-                </p>
-              ) : null}
-            </div>
-            <div className="rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-5 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
-                Focus
-              </p>
-              <p className="mt-2 text-lg font-semibold text-[var(--primary-blue)]">
-                One board. Five columns. Zero clutter.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-3">
-                {sessionToken ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsChatOpen(true)}
-                    className="rounded-full bg-[var(--primary-blue)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:brightness-110"
-                  >
-                    Chat
-                  </button>
-                ) : null}
-                {onLogout ? (
-                  <button
-                    type="button"
-                    onClick={onLogout}
-                    className="rounded-full bg-[var(--secondary-purple)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:brightness-110"
-                  >
-                    Log out
-                  </button>
-                ) : null}
-              </div>
-            </div>
+            ) : null}
           </div>
-          <div className="flex flex-wrap items-center gap-4">
+
+          <div className="hidden xl:flex items-center gap-2 flex-1 justify-center flex-wrap">
             {board.columns.map((column) => (
               <div
                 key={column.id}
-                className="flex items-center gap-2 rounded-full border border-[var(--stroke)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--navy-dark)]"
+                className="flex items-center gap-1.5 rounded-full border border-[var(--stroke)] px-3 py-1 text-xs font-semibold text-[var(--navy-dark)]"
               >
-                <span className="h-2 w-2 rounded-full bg-[var(--accent-yellow)]" />
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-yellow)]" />
                 {column.title}
               </div>
             ))}
           </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {sessionToken ? (
+              <button
+                type="button"
+                onClick={() => setIsChatOpen(true)}
+                className="inline-flex items-center gap-2 rounded-full bg-[var(--primary-blue)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:brightness-110"
+              >
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <path d="M2 2h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H8l-3 2v-2H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Chat
+              </button>
+            ) : null}
+            {onLogout ? (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="inline-flex items-center gap-2 rounded-full border border-[var(--stroke)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--navy-dark)] transition hover:bg-[var(--surface)]"
+              >
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <path d="M5 12H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h3M9.5 10L13 7l-3.5-3M13 7H5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Log out
+              </button>
+            ) : null}
+          </div>
         </header>
 
         <DndContext
-            sensors={sensors}
-            collisionDetection={collisionDetection}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          >
-            <section className="grid gap-6 lg:grid-cols-5">
+          sensors={sensors}
+          collisionDetection={collisionDetection}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="overflow-x-auto">
+            <section className="grid grid-cols-5 gap-4 min-w-[960px]">
               {board.columns.map((column) => (
                 <KanbanColumn
                   key={column.id}
@@ -353,30 +343,32 @@ export const KanbanBoard = ({
                 />
               ))}
             </section>
-            <DragOverlay>
-              {activeCard ? (
-                <div className="w-[260px]">
-                  <KanbanCardPreview card={activeCard} />
-                </div>
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-          {sessionToken && isChatOpen ? (
-            <>
-              <div
-                className="fixed inset-0 z-40 bg-black/10"
-                onClick={() => setIsChatOpen(false)}
-              />
-              <div className="fixed bottom-0 right-0 top-0 z-50 w-full sm:w-[380px]">
-                <AiChatSidebar
-                  sessionToken={sessionToken}
-                  onBoardUpdate={handleAiBoardUpdate}
-                  onSessionExpired={onSessionExpired}
-                  onClose={() => setIsChatOpen(false)}
-                />
+          </div>
+          <DragOverlay>
+            {activeCard ? (
+              <div className="w-[240px]">
+                <KanbanCardPreview card={activeCard} />
               </div>
-            </>
-          ) : null}
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+
+        {sessionToken && isChatOpen ? (
+          <>
+            <div
+              className="fixed inset-0 z-40 bg-black/10"
+              onClick={() => setIsChatOpen(false)}
+            />
+            <div className="fixed bottom-0 right-0 top-0 z-50 w-full sm:w-[380px]">
+              <AiChatSidebar
+                sessionToken={sessionToken}
+                onBoardUpdate={handleAiBoardUpdate}
+                onSessionExpired={onSessionExpired}
+                onClose={() => setIsChatOpen(false)}
+              />
+            </div>
+          </>
+        ) : null}
       </main>
     </div>
   );
