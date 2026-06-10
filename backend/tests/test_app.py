@@ -99,32 +99,6 @@ def test_ai_response_parser_rejects_invalid_json() -> None:
         raise AssertionError("Expected invalid AI JSON to raise HTTPException.")
 
 
-def test_ai_connectivity_route_returns_response(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    monkeypatch.setattr("app.main.call_openrouter", lambda: "4")
-
-    response = make_client(tmp_path).post("/api/ai/test")
-
-    assert response.status_code == 200
-    assert response.json() == {"model": OPENROUTER_MODEL, "response": "4"}
-
-
-def test_ai_connectivity_route_returns_upstream_error(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    def fail_openrouter() -> str:
-        raise HTTPException(status_code=502, detail="OpenRouter returned an error.")
-
-    monkeypatch.setattr("app.main.call_openrouter", fail_openrouter)
-
-    response = make_client(tmp_path).post("/api/ai/test")
-
-    assert response.status_code == 502
-    assert response.json() == {"detail": "OpenRouter returned an error."}
-
 
 def test_ai_chat_requires_user_session(tmp_path: Path) -> None:
     response = make_client(tmp_path).post(

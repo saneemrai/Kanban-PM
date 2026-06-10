@@ -4,10 +4,8 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.staticfiles import StaticFiles
 
 from app.ai_client import (
-    OPENROUTER_MODEL,
     AiChatPayload,
     call_ai_chat,
-    call_openrouter,
 )
 from app.board_store import (
     DEFAULT_DB_PATH,
@@ -24,20 +22,13 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 
 def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -> FastAPI:
-    app = FastAPI(title="Project Management API")
+    app = FastAPI(title="Project Management API", docs_url=None, redoc_url=None)
     app.state.db_path = db_path
     initialize_database(db_path)
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
         return {"status": "ok", "service": "project-management-api"}
-
-    @app.post("/api/ai/test")
-    def test_ai_connectivity() -> dict[str, str]:
-        return {
-            "model": OPENROUTER_MODEL,
-            "response": call_openrouter(),
-        }
 
     @app.post("/api/ai/chat")
     def chat_with_ai(
