@@ -3,21 +3,46 @@ import userEvent from "@testing-library/user-event";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { initialData, type BoardData } from "@/lib/kanban";
 
-const getFirstColumn = () => screen.getAllByTestId(/column-/i)[0];
+const defaultProps = {
+  sessionToken: "session-1",
+  boardId: 1,
+  boardTitle: "Test Board",
+  onLogout: vi.fn(),
+  onSessionExpired: vi.fn(),
+  onBackToBoards: vi.fn(),
+};
+
+const mockBoardFetch = (board: BoardData = initialData) => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes("/data") && init?.method === "PUT") {
+      return Response.json(JSON.parse(init.body as string) as BoardData);
+    }
+    if (String(input).includes("/data")) {
+      return Response.json(board);
+    }
+    return Response.json(board);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+};
 
 describe("KanbanBoard", () => {
+  beforeEach(() => {
+    mockBoardFetch();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("renders five columns", () => {
-    render(<KanbanBoard />);
-    expect(screen.getAllByTestId(/column-/i)).toHaveLength(5);
+  it("renders five columns", async () => {
+    render(<KanbanBoard {...defaultProps} />);
+    expect(await screen.findAllByTestId(/column-/i)).toHaveLength(5);
   });
 
   it("renames a column", async () => {
-    render(<KanbanBoard />);
-    const column = getFirstColumn();
+    render(<KanbanBoard {...defaultProps} />);
+    const column = await screen.findByTestId("column-col-backlog");
     const input = within(column).getByLabelText("Column title");
     await userEvent.clear(input);
     await userEvent.type(input, "New Name");
@@ -25,8 +50,8 @@ describe("KanbanBoard", () => {
   });
 
   it("adds and removes a card", async () => {
-    render(<KanbanBoard />);
-    const column = getFirstColumn();
+    render(<KanbanBoard {...defaultProps} />);
+    const column = await screen.findByTestId("column-col-backlog");
     const addButton = within(column).getByRole("button", {
       name: /add a card/i,
     });
@@ -51,22 +76,14 @@ describe("KanbanBoard", () => {
   });
 
   it("uses a singular card count label", async () => {
-    render(<KanbanBoard />);
-    const column = screen.getByTestId("column-col-discovery");
-
+    render(<KanbanBoard {...defaultProps} />);
+    const column = await screen.findByTestId("column-col-discovery");
     expect(within(column).getByText("1 card")).toBeInTheDocument();
   });
 
-  it("loads and saves the board through the API when a user is provided", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === "PUT") {
-        return Response.json(JSON.parse(init.body as string) as BoardData);
-      }
-      return Response.json(initialData);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(<KanbanBoard sessionToken="session-1" />);
+  it("saves the board through the API after changes", async () => {
+    const fetchMock = mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
 
     const column = await screen.findByTestId("column-col-backlog");
     await userEvent.click(
@@ -80,7 +97,7 @@ describe("KanbanBoard", () => {
 
     expect(await screen.findByText("All changes saved")).toBeVisible();
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/board",
+      "/api/boards/1/data",
       expect.objectContaining({
         method: "PUT",
         headers: expect.objectContaining({ "X-PM-Session": "session-1" }),
@@ -102,9 +119,9 @@ describe("KanbanBoard", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<KanbanBoard sessionToken="session-1" />);
+    render(<KanbanBoard {...defaultProps} />);
 
-    await screen.findByRole("heading", { name: "Kanban Studio" });
+    await screen.findByRole("heading", { name: "Test Board" });
     await userEvent.click(screen.getByRole("button", { name: /chat/i }));
     await userEvent.type(screen.getByLabelText("Message"), "Summarize the board.");
     await userEvent.click(screen.getByRole("button", { name: "Send" }));
@@ -150,14 +167,24 @@ describe("KanbanBoard", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<KanbanBoard sessionToken="session-1" />);
+    render(<KanbanBoard {...defaultProps} />);
 
-    await screen.findByRole("heading", { name: "Kanban Studio" });
+    await screen.findByRole("heading", { name: "Test Board" });
     await userEvent.click(screen.getByRole("button", { name: /chat/i }));
     await userEvent.type(screen.getByLabelText("Message"), "Add an AI card.");
     await userEvent.click(screen.getByRole("button", { name: "Send" }));
 
     expect(await screen.findByText("Added a card.")).toBeVisible();
     expect(screen.getByText("AI-created card")).toBeVisible();
+  });
+
+  it("shows back-to-boards button and calls handler on click", async () => {
+    const onBackToBoards = vi.fn();
+    render(<KanbanBoard {...defaultProps} onBackToBoards={onBackToBoards} />);
+
+    await screen.findByRole("button", { name: /back to boards/i });
+    await userEvent.click(screen.getByRole("button", { name: /back to boards/i }));
+
+    expect(onBackToBoards).toHaveBeenCalledOnce();
   });
 });

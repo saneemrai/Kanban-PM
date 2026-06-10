@@ -10,6 +10,7 @@ import type { BoardData } from "@/lib/kanban";
 
 type AiChatSidebarProps = {
   sessionToken: string;
+  boardId: number;
   onBoardUpdate: (board: BoardData) => void;
   onSessionExpired?: () => void;
   onClose?: () => void;
@@ -17,6 +18,7 @@ type AiChatSidebarProps = {
 
 export const AiChatSidebar = ({
   sessionToken,
+  boardId,
   onBoardUpdate,
   onSessionExpired,
   onClose,
@@ -47,7 +49,7 @@ export const AiChatSidebar = ({
     setIsSending(true);
 
     try {
-      const response = await sendAiChatMessage(sessionToken, message, history);
+      const response = await sendAiChatMessage(sessionToken, boardId, message, history);
       setMessages((current) => [
         ...current,
         { role: "assistant", content: response.message },

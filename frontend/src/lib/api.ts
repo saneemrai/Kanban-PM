@@ -25,6 +25,13 @@ export type AiChatResponse = {
   board: BoardData | null;
 };
 
+export type BoardSummary = {
+  id: number;
+  title: string;
+  cardCount: number;
+  updatedAt: string;
+};
+
 const sessionHeaders = (sessionToken: string) => ({
   "X-PM-Session": sessionToken,
 });
@@ -34,6 +41,18 @@ const parseResponse = async (response: Response) => {
     throw new ApiError(`Request failed with status ${response.status}`, response.status);
   }
   return response.json();
+};
+
+export const register = async (
+  username: string,
+  password: string
+): Promise<LoginResponse> => {
+  const response = await fetch("/api/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  return parseResponse(response);
 };
 
 export const login = async (
@@ -66,8 +85,64 @@ export const checkSession = async (sessionToken: string): Promise<void> => {
   }
 };
 
-export const fetchBoard = async (sessionToken: string): Promise<BoardData> => {
-  const response = await fetch("/api/board", {
+export const fetchBoards = async (sessionToken: string): Promise<BoardSummary[]> => {
+  const response = await fetch("/api/boards", {
+    headers: sessionHeaders(sessionToken),
+  });
+  return parseResponse(response);
+};
+
+export const createBoard = async (
+  sessionToken: string,
+  title: string
+): Promise<BoardSummary> => {
+  const response = await fetch("/api/boards", {
+    method: "POST",
+    headers: {
+      ...sessionHeaders(sessionToken),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ title }),
+  });
+  return parseResponse(response);
+};
+
+export const renameBoard = async (
+  sessionToken: string,
+  boardId: number,
+  title: string
+): Promise<void> => {
+  const response = await fetch(`/api/boards/${boardId}`, {
+    method: "PATCH",
+    headers: {
+      ...sessionHeaders(sessionToken),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ title }),
+  });
+  if (!response.ok) {
+    throw new ApiError(`Request failed with status ${response.status}`, response.status);
+  }
+};
+
+export const deleteBoard = async (
+  sessionToken: string,
+  boardId: number
+): Promise<void> => {
+  const response = await fetch(`/api/boards/${boardId}`, {
+    method: "DELETE",
+    headers: sessionHeaders(sessionToken),
+  });
+  if (!response.ok) {
+    throw new ApiError(`Request failed with status ${response.status}`, response.status);
+  }
+};
+
+export const fetchBoard = async (
+  sessionToken: string,
+  boardId: number
+): Promise<BoardData> => {
+  const response = await fetch(`/api/boards/${boardId}/data`, {
     headers: sessionHeaders(sessionToken),
   });
   return parseResponse(response);
@@ -75,9 +150,10 @@ export const fetchBoard = async (sessionToken: string): Promise<BoardData> => {
 
 export const saveBoard = async (
   sessionToken: string,
+  boardId: number,
   board: BoardData
 ): Promise<BoardData> => {
-  const response = await fetch("/api/board", {
+  const response = await fetch(`/api/boards/${boardId}/data`, {
     method: "PUT",
     headers: {
       ...sessionHeaders(sessionToken),
@@ -90,6 +166,7 @@ export const saveBoard = async (
 
 export const sendAiChatMessage = async (
   sessionToken: string,
+  boardId: number,
   message: string,
   history: AiChatMessage[]
 ): Promise<AiChatResponse> => {
@@ -99,7 +176,7 @@ export const sendAiChatMessage = async (
       ...sessionHeaders(sessionToken),
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ message, history }),
+    body: JSON.stringify({ message, history, boardId }),
   });
   return parseResponse(response);
 };

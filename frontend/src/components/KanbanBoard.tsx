@@ -35,9 +35,12 @@ import {
 } from "@/lib/kanban";
 
 type KanbanBoardProps = {
-  sessionToken?: string;
-  onLogout?: () => void;
-  onSessionExpired?: () => void;
+  sessionToken: string;
+  boardId: number;
+  boardTitle: string;
+  onLogout: () => void;
+  onSessionExpired: () => void;
+  onBackToBoards: () => void;
 };
 
 const getClientY = (event: Event): number | null => {
@@ -48,12 +51,15 @@ const getClientY = (event: Event): number | null => {
 
 export const KanbanBoard = ({
   sessionToken,
+  boardId,
+  boardTitle,
   onLogout,
   onSessionExpired,
+  onBackToBoards,
 }: KanbanBoardProps) => {
   const [board, setBoard] = useState<BoardData>(() => initialData);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(Boolean(sessionToken));
+  const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [saveError, setSaveError] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
@@ -73,12 +79,8 @@ export const KanbanBoard = ({
     saveState === "saving" ? "Saving changes" : "All changes saved";
 
   useEffect(() => {
-    if (!sessionToken) {
-      return;
-    }
-
     let isCurrent = true;
-    fetchBoard(sessionToken)
+    fetchBoard(sessionToken, boardId)
       .then((nextBoard) => {
         if (isCurrent) {
           setBoard(nextBoard);
@@ -88,7 +90,7 @@ export const KanbanBoard = ({
       .catch((error) => {
         if (isCurrent) {
           if (error instanceof ApiError && error.status === 401) {
-            onSessionExpired?.();
+            onSessionExpired();
             return;
           }
           setLoadError("Board could not be loaded.");
@@ -103,20 +105,17 @@ export const KanbanBoard = ({
     return () => {
       isCurrent = false;
     };
-  }, [sessionToken, onSessionExpired]);
+  }, [sessionToken, boardId, onSessionExpired]);
 
   const commitBoard = (nextBoard: BoardData) => {
     setBoard(nextBoard);
-    if (!sessionToken) {
-      return;
-    }
 
     const requestId = saveRequestId.current + 1;
     saveRequestId.current = requestId;
     setSaveError("");
     setSaveState("saving");
 
-    saveBoard(sessionToken, nextBoard)
+    saveBoard(sessionToken, boardId, nextBoard)
       .then((savedBoard) => {
         if (saveRequestId.current === requestId) {
           setBoard(savedBoard);
@@ -126,7 +125,7 @@ export const KanbanBoard = ({
       .catch((error) => {
         if (saveRequestId.current === requestId) {
           if (error instanceof ApiError && error.status === 401) {
-            onSessionExpired?.();
+            onSessionExpired();
             return;
           }
           setSaveError("Board changes could not be saved.");
@@ -184,7 +183,6 @@ export const KanbanBoard = ({
       ),
     };
     setBoard(nextBoard);
-    if (!sessionToken) return;
     if (renameTimer.current) clearTimeout(renameTimer.current);
     renameTimer.current = setTimeout(() => commitBoard(nextBoard), 400);
   };
@@ -258,10 +256,21 @@ export const KanbanBoard = ({
       <main className="relative mx-auto flex min-h-screen max-w-[1500px] flex-col gap-6 px-6 pb-10 pt-6">
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--stroke)] bg-white/80 px-6 py-4 shadow-[var(--shadow)] backdrop-blur">
           <div className="flex items-center gap-3 min-w-0">
-            <h1 className="font-display text-xl font-semibold text-[var(--navy-dark)] whitespace-nowrap">
-              Kanban Studio
+            <button
+              type="button"
+              onClick={onBackToBoards}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[var(--stroke)] px-3 py-1.5 text-xs font-semibold text-[var(--navy-dark)] transition hover:bg-[var(--surface)]"
+              aria-label="Back to boards"
+            >
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M7.5 10.5L3 6l4.5-4.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Boards
+            </button>
+            <h1 className="font-display text-xl font-semibold text-[var(--navy-dark)] whitespace-nowrap truncate">
+              {boardTitle}
             </h1>
-            {sessionToken && saveState !== "idle" ? (
+            {saveState !== "idle" ? (
               <div
                 className="inline-flex items-center gap-1.5 rounded-full border border-[var(--stroke)] bg-white px-2.5 py-1 text-xs font-semibold text-[var(--navy-dark)] shadow-sm whitespace-nowrap"
                 role="status"
@@ -297,30 +306,26 @@ export const KanbanBoard = ({
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
-            {sessionToken ? (
-              <button
-                type="button"
-                onClick={() => setIsChatOpen(true)}
-                className="inline-flex items-center gap-2 rounded-full bg-[var(--primary-blue)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:brightness-110"
-              >
-                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                  <path d="M2 2h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H8l-3 2v-2H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                Chat
-              </button>
-            ) : null}
-            {onLogout ? (
-              <button
-                type="button"
-                onClick={onLogout}
-                className="inline-flex items-center gap-2 rounded-full border border-[var(--stroke)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--navy-dark)] transition hover:bg-[var(--surface)]"
-              >
-                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                  <path d="M5 12H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h3M9.5 10L13 7l-3.5-3M13 7H5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                Log out
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => setIsChatOpen(true)}
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--primary-blue)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:brightness-110"
+            >
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path d="M2 2h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H8l-3 2v-2H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Chat
+            </button>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--stroke)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--navy-dark)] transition hover:bg-[var(--surface)]"
+            >
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path d="M5 12H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h3M9.5 10L13 7l-3.5-3M13 7H5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Log out
+            </button>
           </div>
         </header>
 
@@ -353,7 +358,7 @@ export const KanbanBoard = ({
           </DragOverlay>
         </DndContext>
 
-        {sessionToken && isChatOpen ? (
+        {isChatOpen ? (
           <>
             <div
               className="fixed inset-0 z-40 bg-black/10"
@@ -362,6 +367,7 @@ export const KanbanBoard = ({
             <div className="fixed bottom-0 right-0 top-0 z-50 w-full sm:w-[380px]">
               <AiChatSidebar
                 sessionToken={sessionToken}
+                boardId={boardId}
                 onBoardUpdate={handleAiBoardUpdate}
                 onSessionExpired={onSessionExpired}
                 onClose={() => setIsChatOpen(false)}

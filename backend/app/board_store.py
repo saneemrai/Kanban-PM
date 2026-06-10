@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from pathlib import Path
 import sqlite3
 from typing import Any
@@ -7,8 +9,10 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[1] / "data" / "pm.sqlite3"
-MVP_USERNAME = "user"
-MVP_PASSWORD = "password"
+
+DEFAULT_USERNAME = "user"
+DEFAULT_PASSWORD = "password"
+
 FIXED_COLUMN_IDS = [
     "col-backlog",
     "col-discovery",
@@ -16,6 +20,8 @@ FIXED_COLUMN_IDS = [
     "col-review",
     "col-done",
 ]
+
+SCHEMA_VERSION = 2
 
 
 class Card(BaseModel):
@@ -41,7 +47,21 @@ class BoardData(BaseModel):
     cards: dict[str, Card]
 
 
+class BoardSummary(BaseModel):
+    id: int
+    title: str
+    cardCount: int
+    updatedAt: str
+
+
 class LoginPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    username: str
+    password: str
+
+
+class RegisterPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     username: str
@@ -103,6 +123,25 @@ DEFAULT_CARDS = {
 DEFAULT_BOARD = BoardData(columns=DEFAULT_COLUMNS, cards=DEFAULT_CARDS)
 
 
+def hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)
+    key = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 260000)
+    return f"pbkdf2:sha256:260000:{salt}:{key.hex()}"
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    if not password_hash:
+        return False
+    parts = password_hash.split(":")
+    if len(parts) != 5 or parts[0] != "pbkdf2" or parts[1] != "sha256":
+        return False
+    _, _, iterations_str, salt, stored_key = parts
+    key = hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), salt.encode(), int(iterations_str)
+    )
+    return secrets.compare_digest(key.hex(), stored_key)
+
+
 def connect(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(db_path)
@@ -113,68 +152,263 @@ def connect(db_path: Path) -> sqlite3.Connection:
 
 def initialize_database(db_path: Path) -> None:
     with connect(db_path) as connection:
-        connection.executescript(
+        _run_migrations(connection)
+        _ensure_default_user(connection)
+
+
+def _run_migrations(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL DEFAULT 0)"
+    )
+    row = connection.execute("SELECT version FROM schema_version").fetchone()
+    if row is None:
+        tables = {
+            r["name"]
+            for r in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        version = 1 if "users" in tables else 0
+        connection.execute("INSERT INTO schema_version (version) VALUES (?)", (version,))
+    else:
+        version = row["version"]
+
+    if version < 2:
+        _migrate_to_v2(connection)
+        connection.execute("UPDATE schema_version SET version = 2")
+
+
+def _migrate_to_v2(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+    user_cols = {
+        r["name"]
+        for r in connection.execute("PRAGMA table_info(users)").fetchall()
+    }
+    if "password_hash" not in user_cols:
+        connection.execute(
+            "ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''"
+        )
+
+    boards_row = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='boards'"
+    ).fetchone()
+
+    if boards_row is None:
+        connection.execute(
             """
-            CREATE TABLE IF NOT EXISTS users (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              username TEXT NOT NULL UNIQUE,
-              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS boards (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              user_id INTEGER NOT NULL UNIQUE,
-              title TEXT NOT NULL DEFAULT 'Project Board',
-              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              FOREIGN KEY (user_id) REFERENCES users (id)
-            );
-
-            CREATE TABLE IF NOT EXISTS columns (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              board_id INTEGER NOT NULL,
-              key TEXT NOT NULL,
-              title TEXT NOT NULL,
-              position INTEGER NOT NULL,
-              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              FOREIGN KEY (board_id) REFERENCES boards (id),
-              UNIQUE (board_id, key),
-              UNIQUE (board_id, position)
-            );
-
-            CREATE TABLE IF NOT EXISTS cards (
-              id TEXT NOT NULL,
-              board_id INTEGER NOT NULL,
-              column_key TEXT NOT NULL,
-              title TEXT NOT NULL,
-              details TEXT NOT NULL,
-              position INTEGER NOT NULL,
-              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              PRIMARY KEY (board_id, id),
-              FOREIGN KEY (board_id) REFERENCES boards (id),
-              FOREIGN KEY (board_id, column_key) REFERENCES columns (board_id, key),
-              UNIQUE (board_id, column_key, position)
-            );
-
-            CREATE TABLE IF NOT EXISTS sessions (
-              user_id INTEGER PRIMARY KEY,
-              token TEXT NOT NULL UNIQUE,
-              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              FOREIGN KEY (user_id) REFERENCES users (id)
-            );
+            CREATE TABLE boards (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                title TEXT NOT NULL DEFAULT 'Project Board',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
             """
         )
-        ensure_user_board(connection, MVP_USERNAME)
+    elif _boards_has_unique_user_id(boards_row["sql"] or ""):
+        # executescript issues COMMIT first, ensuring FK can be toggled
+        connection.executescript(
+            """
+            PRAGMA foreign_keys = OFF;
+
+            CREATE TABLE boards_v2 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                title TEXT NOT NULL DEFAULT 'Project Board',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            );
+
+            INSERT INTO boards_v2 SELECT * FROM boards;
+            DROP TABLE boards;
+            ALTER TABLE boards_v2 RENAME TO boards;
+
+            PRAGMA foreign_keys = ON;
+            """
+        )
+
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS columns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            board_id INTEGER NOT NULL,
+            key TEXT NOT NULL,
+            title TEXT NOT NULL,
+            position INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (board_id) REFERENCES boards (id),
+            UNIQUE (board_id, key),
+            UNIQUE (board_id, position)
+        )
+        """
+    )
+
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cards (
+            id TEXT NOT NULL,
+            board_id INTEGER NOT NULL,
+            column_key TEXT NOT NULL,
+            title TEXT NOT NULL,
+            details TEXT NOT NULL,
+            position INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (board_id, id),
+            FOREIGN KEY (board_id) REFERENCES boards (id),
+            FOREIGN KEY (board_id, column_key) REFERENCES columns (board_id, key),
+            UNIQUE (board_id, column_key, position)
+        )
+        """
+    )
+
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sessions (
+            user_id INTEGER PRIMARY KEY,
+            token TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+        """
+    )
+
+
+def _boards_has_unique_user_id(sql: str) -> bool:
+    sql_upper = sql.upper()
+    return "UNIQUE" in sql_upper and "USER_ID" in sql_upper
+
+
+def _ensure_default_user(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        "INSERT OR IGNORE INTO users (username, password_hash) VALUES (?, ?)",
+        (DEFAULT_USERNAME, hash_password(DEFAULT_PASSWORD)),
+    )
+
+    row = connection.execute(
+        "SELECT id, password_hash FROM users WHERE username = ?",
+        (DEFAULT_USERNAME,),
+    ).fetchone()
+
+    if row and not row["password_hash"]:
+        connection.execute(
+            "UPDATE users SET password_hash = ? WHERE username = ?",
+            (hash_password(DEFAULT_PASSWORD), DEFAULT_USERNAME),
+        )
+        row = connection.execute(
+            "SELECT id, password_hash FROM users WHERE username = ?",
+            (DEFAULT_USERNAME,),
+        ).fetchone()
+
+    user_id = row["id"]
+
+    board_count = connection.execute(
+        "SELECT COUNT(*) AS count FROM boards WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()["count"]
+
+    if board_count == 0:
+        _create_board_with_seed_data(connection, user_id, "My Board")
+    else:
+        board_id = connection.execute(
+            "SELECT id FROM boards WHERE user_id = ? ORDER BY id ASC LIMIT 1",
+            (user_id,),
+        ).fetchone()["id"]
+
+        col_count = connection.execute(
+            "SELECT COUNT(*) AS count FROM columns WHERE board_id = ?",
+            (board_id,),
+        ).fetchone()["count"]
+        if col_count == 0:
+            for position, column in enumerate(DEFAULT_BOARD.columns):
+                connection.execute(
+                    "INSERT INTO columns (board_id, key, title, position) VALUES (?, ?, ?, ?)",
+                    (board_id, column.id, column.title, position),
+                )
+
+        card_count = connection.execute(
+            "SELECT COUNT(*) AS count FROM cards WHERE board_id = ?",
+            (board_id,),
+        ).fetchone()["count"]
+        if card_count == 0:
+            insert_board_cards(connection, board_id, DEFAULT_BOARD)
+
+
+def _create_board_with_seed_data(
+    connection: sqlite3.Connection, user_id: int, title: str
+) -> int:
+    connection.execute(
+        "INSERT INTO boards (user_id, title) VALUES (?, ?)",
+        (user_id, title),
+    )
+    board_id = connection.execute(
+        "SELECT id FROM boards WHERE user_id = ? ORDER BY id DESC LIMIT 1",
+        (user_id,),
+    ).fetchone()["id"]
+    for position, column in enumerate(DEFAULT_BOARD.columns):
+        connection.execute(
+            "INSERT INTO columns (board_id, key, title, position) VALUES (?, ?, ?, ?)",
+            (board_id, column.id, column.title, position),
+        )
+    insert_board_cards(connection, board_id, DEFAULT_BOARD)
+    return board_id
+
+
+def register_user(db_path: Path, username: str, password: str) -> None:
+    username = username.strip()
+    if not username or not password:
+        raise HTTPException(
+            status_code=422, detail="Username and password are required."
+        )
+    if len(username) < 3 or len(username) > 50:
+        raise HTTPException(
+            status_code=422, detail="Username must be 3-50 characters."
+        )
+    if len(password) < 6:
+        raise HTTPException(
+            status_code=422, detail="Password must be at least 6 characters."
+        )
+
+    password_hash = hash_password(password)
+    with connect(db_path) as connection:
+        try:
+            connection.execute(
+                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                (username, password_hash),
+            )
+        except sqlite3.IntegrityError as error:
+            raise HTTPException(
+                status_code=409, detail="Username already taken."
+            ) from error
+        user_id = connection.execute(
+            "SELECT id FROM users WHERE username = ?",
+            (username,),
+        ).fetchone()["id"]
+        _create_board_with_seed_data(connection, user_id, "My Board")
 
 
 def create_session(db_path: Path, username: str, password: str) -> str:
-    if username != MVP_USERNAME or password != MVP_PASSWORD:
-        raise HTTPException(status_code=401, detail="Invalid credentials.")
-
     with connect(db_path) as connection:
-        user_id = ensure_user_board(connection, username)
+        row = connection.execute(
+            "SELECT id, password_hash FROM users WHERE username = ?",
+            (username,),
+        ).fetchone()
+        if row is None or not verify_password(password, row["password_hash"]):
+            raise HTTPException(status_code=401, detail="Invalid credentials.")
+        user_id = row["id"]
         token = uuid4().hex
         connection.execute(
             """
@@ -214,97 +448,105 @@ def get_username_for_session(db_path: Path, token: str | None) -> str:
     return row["username"]
 
 
-def ensure_user_board(connection: sqlite3.Connection, username: str) -> int:
-    connection.execute(
-        "INSERT OR IGNORE INTO users (username) VALUES (?)",
-        (username,),
-    )
-    user_id = connection.execute(
-        "SELECT id FROM users WHERE username = ?",
-        (username,),
-    ).fetchone()["id"]
-    connection.execute(
-        "INSERT OR IGNORE INTO boards (user_id) VALUES (?)",
-        (user_id,),
-    )
-    board_id = connection.execute(
-        "SELECT id FROM boards WHERE user_id = ?",
-        (user_id,),
-    ).fetchone()["id"]
-
-    column_count = connection.execute(
-        "SELECT COUNT(*) AS count FROM columns WHERE board_id = ?",
-        (board_id,),
-    ).fetchone()["count"]
-    if column_count == 0:
-        for position, column in enumerate(DEFAULT_BOARD.columns):
-            connection.execute(
-                """
-                INSERT INTO columns (board_id, key, title, position)
-                VALUES (?, ?, ?, ?)
-                """,
-                (board_id, column.id, column.title, position),
-            )
-
-    card_count = connection.execute(
-        "SELECT COUNT(*) AS count FROM cards WHERE board_id = ?",
-        (board_id,),
-    ).fetchone()["count"]
-    if card_count == 0:
-        insert_board_cards(connection, board_id, DEFAULT_BOARD)
-
-    return board_id
-
-
-def get_board(db_path: Path, username: str) -> BoardData:
+def list_boards(db_path: Path, username: str) -> list[BoardSummary]:
     with connect(db_path) as connection:
-        board_id = get_board_id(connection, username)
-        columns = connection.execute(
+        rows = connection.execute(
             """
-            SELECT key, title
-            FROM columns
-            WHERE board_id = ?
-            ORDER BY position
+            SELECT b.id, b.title, b.updated_at,
+                   COUNT(c.id) AS card_count
+            FROM boards b
+            JOIN users u ON u.id = b.user_id
+            LEFT JOIN cards c ON c.board_id = b.id
+            WHERE u.username = ?
+            GROUP BY b.id
+            ORDER BY b.id ASC
             """,
-            (board_id,),
+            (username,),
         ).fetchall()
-        cards = connection.execute(
-            """
-            SELECT id, column_key, title, details
-            FROM cards
-            WHERE board_id = ?
-            ORDER BY column_key, position
-            """,
-            (board_id,),
-        ).fetchall()
+    return [
+        BoardSummary(
+            id=row["id"],
+            title=row["title"],
+            cardCount=row["card_count"],
+            updatedAt=row["updated_at"],
+        )
+        for row in rows
+    ]
 
-    cards_by_column: dict[str, list[str]] = {column["key"]: [] for column in columns}
-    cards_by_id: dict[str, Card] = {}
-    for card in cards:
-        cards_by_column[card["column_key"]].append(card["id"])
-        cards_by_id[card["id"]] = Card(
-            id=card["id"],
-            title=card["title"],
-            details=card["details"],
+
+def create_board(db_path: Path, username: str, title: str) -> BoardSummary:
+    title = title.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="Board title is required.")
+    with connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT id FROM users WHERE username = ?", (username,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="User not found.")
+        user_id = row["id"]
+        board_id = _create_board_with_seed_data(connection, user_id, title)
+        row = connection.execute(
+            """
+            SELECT b.id, b.title, b.updated_at, COUNT(c.id) AS card_count
+            FROM boards b
+            LEFT JOIN cards c ON c.board_id = b.id
+            WHERE b.id = ?
+            GROUP BY b.id
+            """,
+            (board_id,),
+        ).fetchone()
+    return BoardSummary(
+        id=row["id"],
+        title=row["title"],
+        cardCount=row["card_count"],
+        updatedAt=row["updated_at"],
+    )
+
+
+def rename_board(db_path: Path, username: str, board_id: int, title: str) -> None:
+    title = title.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="Board title is required.")
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        connection.execute(
+            "UPDATE boards SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (title, board_id),
         )
 
-    return BoardData(
-        columns=[
-            Column(
-                id=column["key"],
-                title=column["title"],
-                cardIds=cards_by_column[column["key"]],
+
+def delete_board(db_path: Path, username: str, board_id: int) -> None:
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        board_count = connection.execute(
+            """
+            SELECT COUNT(*) AS count FROM boards
+            WHERE user_id = (SELECT user_id FROM boards WHERE id = ?)
+            """,
+            (board_id,),
+        ).fetchone()["count"]
+        if board_count <= 1:
+            raise HTTPException(
+                status_code=422, detail="Cannot delete the last board."
             )
-            for column in columns
-        ],
-        cards=cards_by_id,
-    )
+        connection.execute("DELETE FROM cards WHERE board_id = ?", (board_id,))
+        connection.execute("DELETE FROM columns WHERE board_id = ?", (board_id,))
+        connection.execute("DELETE FROM boards WHERE id = ?", (board_id,))
 
 
-def save_board(db_path: Path, username: str, payload: dict[str, Any]) -> BoardData:
+def get_board_by_id(db_path: Path, username: str, board_id: int) -> BoardData:
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+    return _load_board_data(db_path, board_id)
+
+
+def save_board_by_id(
+    db_path: Path, username: str, board_id: int, payload: dict[str, Any]
+) -> BoardData:
     board = parse_and_validate_board(payload)
     with connect(db_path) as connection:
-        board_id = get_board_id(connection, username)
+        _verify_board_ownership(connection, username, board_id)
         for position, column in enumerate(board.columns):
             connection.execute(
                 """
@@ -320,22 +562,94 @@ def save_board(db_path: Path, username: str, payload: dict[str, Any]) -> BoardDa
             "UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (board_id,),
         )
-    return get_board(db_path, username)
+    return _load_board_data(db_path, board_id)
 
 
-def get_board_id(connection: sqlite3.Connection, username: str) -> int:
+def get_board(db_path: Path, username: str) -> BoardData:
+    with connect(db_path) as connection:
+        board_id = _get_first_board_id(connection, username)
+    return _load_board_data(db_path, board_id)
+
+
+def save_board(db_path: Path, username: str, payload: dict[str, Any]) -> BoardData:
+    with connect(db_path) as connection:
+        board_id = _get_first_board_id(connection, username)
+    return save_board_by_id(db_path, username, board_id, payload)
+
+
+def _load_board_data(db_path: Path, board_id: int) -> BoardData:
+    with connect(db_path) as connection:
+        columns = connection.execute(
+            "SELECT key, title FROM columns WHERE board_id = ? ORDER BY position",
+            (board_id,),
+        ).fetchall()
+        cards = connection.execute(
+            """
+            SELECT id, column_key, title, details
+            FROM cards
+            WHERE board_id = ?
+            ORDER BY column_key, position
+            """,
+            (board_id,),
+        ).fetchall()
+
+    cards_by_column: dict[str, list[str]] = {col["key"]: [] for col in columns}
+    cards_by_id: dict[str, Card] = {}
+    for card in cards:
+        cards_by_column[card["column_key"]].append(card["id"])
+        cards_by_id[card["id"]] = Card(
+            id=card["id"],
+            title=card["title"],
+            details=card["details"],
+        )
+
+    return BoardData(
+        columns=[
+            Column(
+                id=col["key"],
+                title=col["title"],
+                cardIds=cards_by_column[col["key"]],
+            )
+            for col in columns
+        ],
+        cards=cards_by_id,
+    )
+
+
+def _get_first_board_id(connection: sqlite3.Connection, username: str) -> int:
     row = connection.execute(
         """
         SELECT boards.id
         FROM boards
         JOIN users ON users.id = boards.user_id
         WHERE users.username = ?
+        ORDER BY boards.id ASC
+        LIMIT 1
         """,
         (username,),
     ).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Board not found.")
     return row["id"]
+
+
+def _verify_board_ownership(
+    connection: sqlite3.Connection, username: str, board_id: int
+) -> None:
+    row = connection.execute(
+        """
+        SELECT boards.id FROM boards
+        JOIN users ON users.id = boards.user_id
+        WHERE boards.id = ? AND users.username = ?
+        """,
+        (board_id, username),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Board not found.")
+
+
+def get_board_id(connection: sqlite3.Connection, username: str) -> int:
+    return _get_first_board_id(connection, username)
 
 
 def insert_board_cards(

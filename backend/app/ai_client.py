@@ -26,6 +26,7 @@ class AiChatPayload(BaseModel):
 
     message: str
     history: list[ChatMessage] = Field(default_factory=list)
+    boardId: int | None = None
 
 
 class AiStructuredResponse(BaseModel):

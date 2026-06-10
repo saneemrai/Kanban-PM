@@ -4,6 +4,13 @@ export type Card = {
   details: string;
 };
 
+export type BoardSummary = {
+  id: number;
+  title: string;
+  cardCount: number;
+  updatedAt: string;
+};
+
 export type Column = {
   id: string;
   title: string;

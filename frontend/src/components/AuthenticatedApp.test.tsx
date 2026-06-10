@@ -3,20 +3,38 @@ import userEvent from "@testing-library/user-event";
 import { AuthenticatedApp } from "@/components/AuthenticatedApp";
 import { initialData } from "@/lib/kanban";
 
-const mockFetch = () => {
+const MOCK_BOARDS = [{ id: 1, title: "My Board", cardCount: 8, updatedAt: "2024-01-01" }];
+
+const mockFetch = (options: { loginFails?: boolean; boardsFails?: boolean } = {}) => {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    if (input === "/api/login") {
+    const url = String(input);
+    if (url === "/api/login") {
       const body = JSON.parse(init?.body as string) as {
         username: string;
         password: string;
       };
-      if (body.username === "user" && body.password === "password") {
-        return Response.json({ username: "user", sessionToken: "session-1" });
+      if (options.loginFails || !(body.username === "user" && body.password === "password")) {
+        return Response.json({ detail: "Invalid credentials." }, { status: 401 });
       }
-      return Response.json({ detail: "Invalid credentials." }, { status: 401 });
+      return Response.json({ username: "user", sessionToken: "session-1" });
     }
-    if (input === "/api/logout") {
+    if (url === "/api/logout") {
       return Response.json({ status: "ok" });
+    }
+    if (url === "/api/session") {
+      if (options.boardsFails) {
+        return Response.json({ detail: "Expired" }, { status: 401 });
+      }
+      return Response.json({ username: "user" });
+    }
+    if (url === "/api/boards") {
+      if (options.boardsFails) {
+        return Response.json({ detail: "Expired" }, { status: 401 });
+      }
+      return Response.json(MOCK_BOARDS);
+    }
+    if (url.includes("/data")) {
+      return Response.json(initialData);
     }
     return Response.json(initialData);
   });
@@ -47,7 +65,7 @@ describe("AuthenticatedApp", () => {
 
     expect(screen.getByRole("heading", { name: "Sign in" })).toBeVisible();
     expect(
-      screen.queryByRole("heading", { name: "Kanban Studio" })
+      screen.queryByTestId(/column-/i)
     ).not.toBeInTheDocument();
   });
 
@@ -61,19 +79,80 @@ describe("AuthenticatedApp", () => {
 
     expect(screen.getByText("Invalid username or password.")).toBeVisible();
     expect(
-      screen.queryByRole("heading", { name: "Kanban Studio" })
+      screen.queryByTestId(/column-/i)
     ).not.toBeInTheDocument();
   });
 
-  it("shows the board after sign in", async () => {
+  it("shows the board after sign in when there is exactly one board", async () => {
     render(<AuthenticatedApp />);
 
     await signIn();
 
-    expect(
-      await screen.findByRole("heading", { name: "Kanban Studio" })
-    ).toBeVisible();
-    expect(screen.getAllByTestId(/column-/i)).toHaveLength(5);
+    // With a single board, the app auto-navigates to it
+    expect(await screen.findAllByTestId(/column-/i)).toHaveLength(5);
+    expect(screen.getByRole("heading", { name: "My Board" })).toBeVisible();
+  });
+
+  it("shows board selector when there are multiple boards", async () => {
+    const multiBoards = [
+      { id: 1, title: "Board One", cardCount: 8, updatedAt: "2024-01-01" },
+      { id: 2, title: "Board Two", cardCount: 3, updatedAt: "2024-01-02" },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/login") {
+          return Response.json({ username: "user", sessionToken: "session-1" });
+        }
+        if (url === "/api/boards") return Response.json(multiBoards);
+        if (url.includes("/data")) return Response.json(initialData);
+        return Response.json(initialData);
+      })
+    );
+
+    render(<AuthenticatedApp />);
+    await signIn();
+
+    expect(await screen.findByRole("heading", { name: "My Boards" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Board One" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Board Two" })).toBeVisible();
+  });
+
+  it("navigates to board on selection", async () => {
+    const multiBoards = [
+      { id: 1, title: "Board One", cardCount: 8, updatedAt: "2024-01-01" },
+      { id: 2, title: "Board Two", cardCount: 3, updatedAt: "2024-01-02" },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/login") {
+          return Response.json({ username: "user", sessionToken: "session-1" });
+        }
+        if (url === "/api/boards") return Response.json(multiBoards);
+        if (url.includes("/data")) return Response.json(initialData);
+        return Response.json(initialData);
+      })
+    );
+
+    render(<AuthenticatedApp />);
+    const user = await signIn();
+
+    await screen.findByRole("heading", { name: "My Boards" });
+    await user.click(screen.getAllByRole("button", { name: /open board/i })[0]);
+
+    expect(await screen.findAllByTestId(/column-/i)).toHaveLength(5);
+  });
+
+  it("shows register form when toggled", async () => {
+    render(<AuthenticatedApp />);
+
+    await userEvent.click(screen.getByRole("button", { name: /create one/i }));
+
+    expect(screen.getByRole("heading", { name: "Create account" })).toBeVisible();
+    expect(screen.getByRole("button", { name: /create account/i })).toBeVisible();
   });
 
   it("logs out", async () => {
@@ -82,15 +161,16 @@ describe("AuthenticatedApp", () => {
     const user = await signIn();
     await user.click(await screen.findByRole("button", { name: /log out/i }));
 
-    expect(screen.getByRole("heading", { name: "Sign in" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeVisible();
     expect(
-      screen.queryByRole("heading", { name: "Kanban Studio" })
+      screen.queryByTestId(/column-/i)
     ).not.toBeInTheDocument();
   });
 
   it("returns to sign in when the session expires", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      if (input === "/api/login") {
+      const url = String(input);
+      if (url === "/api/login") {
         return Response.json({ username: "user", sessionToken: "stale-session" });
       }
       return Response.json({ detail: "Expired" }, { status: 401 });
