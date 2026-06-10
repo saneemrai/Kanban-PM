@@ -1,7 +1,10 @@
+export type Priority = "low" | "medium" | "high" | "critical";
+
 export type Card = {
   id: string;
   title: string;
   details: string;
+  priority?: Priority | null;
 };
 
 export type BoardSummary = {

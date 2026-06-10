@@ -21,7 +21,10 @@ FIXED_COLUMN_IDS = [
     "col-done",
 ]
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+
+
+VALID_PRIORITIES = {"low", "medium", "high", "critical"}
 
 
 class Card(BaseModel):
@@ -30,6 +33,7 @@ class Card(BaseModel):
     id: str
     title: str
     details: str
+    priority: str | None = None
 
 
 class Column(BaseModel):
@@ -177,6 +181,10 @@ def _run_migrations(connection: sqlite3.Connection) -> None:
         _migrate_to_v2(connection)
         connection.execute("UPDATE schema_version SET version = 2")
 
+    if version < 3:
+        _migrate_to_v3(connection)
+        connection.execute("UPDATE schema_version SET version = 3")
+
 
 def _migrate_to_v2(connection: sqlite3.Connection) -> None:
     connection.execute(
@@ -285,6 +293,15 @@ def _migrate_to_v2(connection: sqlite3.Connection) -> None:
         )
         """
     )
+
+
+def _migrate_to_v3(connection: sqlite3.Connection) -> None:
+    card_cols = {
+        r["name"]
+        for r in connection.execute("PRAGMA table_info(cards)").fetchall()
+    }
+    if "priority" not in card_cols:
+        connection.execute("ALTER TABLE cards ADD COLUMN priority TEXT")
 
 
 def _boards_has_unique_user_id(sql: str) -> bool:
@@ -585,7 +602,7 @@ def _load_board_data(db_path: Path, board_id: int) -> BoardData:
         ).fetchall()
         cards = connection.execute(
             """
-            SELECT id, column_key, title, details
+            SELECT id, column_key, title, details, priority
             FROM cards
             WHERE board_id = ?
             ORDER BY column_key, position
@@ -601,6 +618,7 @@ def _load_board_data(db_path: Path, board_id: int) -> BoardData:
             id=card["id"],
             title=card["title"],
             details=card["details"],
+            priority=card["priority"],
         )
 
     return BoardData(
@@ -662,10 +680,10 @@ def insert_board_cards(
             card = board.cards[card_id]
             connection.execute(
                 """
-                INSERT INTO cards (id, board_id, column_key, title, details, position)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO cards (id, board_id, column_key, title, details, position, priority)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (card.id, board_id, column.id, card.title, card.details, position),
+                (card.id, board_id, column.id, card.title, card.details, position, card.priority),
             )
 
 
@@ -713,5 +731,10 @@ def parse_and_validate_board(payload: dict[str, Any]) -> BoardData:
             )
         if not card.title.strip():
             raise HTTPException(status_code=422, detail="Card title is required.")
+        if card.priority is not None and card.priority not in VALID_PRIORITIES:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid priority '{card.priority}'. Must be one of: {', '.join(sorted(VALID_PRIORITIES))}.",
+            )
 
     return board

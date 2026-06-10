@@ -612,6 +612,49 @@ def test_ai_chat_with_board_id(tmp_path: Path, monkeypatch) -> None:
     assert "card-1" in second_board_data["columns"][4]["cardIds"]
 
 
+def test_card_priority_roundtrip(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["cards"]["card-1"]["priority"] = "high"
+
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+    saved = response.json()
+
+    assert response.status_code == 200
+    assert saved["cards"]["card-1"]["priority"] == "high"
+
+
+def test_card_priority_rejects_invalid_value(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    board["cards"]["card-1"]["priority"] = "urgent"
+
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    assert response.status_code == 422
+
+
+def test_card_priority_null_clears_priority(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["cards"]["card-1"]["priority"] = "critical"
+    client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    board["cards"]["card-1"]["priority"] = None
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["cards"]["card-1"]["priority"] is None
+
+
 def test_schema_migration_from_v1_to_v2(tmp_path: Path) -> None:
     """Verify that a v1 schema (single-board, no password_hash) migrates correctly."""
     from app.board_store import connect, DEFAULT_BOARD, insert_board_cards
@@ -675,7 +718,15 @@ def test_schema_migration_from_v1_to_v2(tmp_path: Path) -> None:
                 "INSERT INTO columns (board_id, key, title, position) VALUES (1, ?, ?, ?)",
                 (col.id, col.title, position),
             )
-        insert_board_cards(conn, 1, DEFAULT_BOARD)
+        # Seed v1 cards without priority column
+        for col in DEFAULT_BOARD.columns:
+            for position, card_id in enumerate(col.cardIds):
+                card = DEFAULT_BOARD.cards[card_id]
+                conn.execute(
+                    "INSERT INTO cards (id, board_id, column_key, title, details, position)"
+                    " VALUES (?, 1, ?, ?, ?, ?)",
+                    (card.id, col.id, card.title, card.details, position),
+                )
 
     from app.board_store import initialize_database, get_board
 

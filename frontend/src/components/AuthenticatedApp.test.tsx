@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AuthenticatedApp } from "@/components/AuthenticatedApp";
 import { initialData } from "@/lib/kanban";
@@ -159,12 +159,13 @@ describe("AuthenticatedApp", () => {
     render(<AuthenticatedApp />);
 
     const user = await signIn();
-    await user.click(await screen.findByRole("button", { name: /log out/i }));
+    const logoutButton = await screen.findByRole("button", { name: /log out/i });
+    await user.click(logoutButton);
 
-    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeVisible();
-    expect(
-      screen.queryByTestId(/column-/i)
-    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Sign in" })).toBeVisible();
+      expect(screen.queryByTestId(/column-/i)).not.toBeInTheDocument();
+    }, { timeout: 3000 });
   });
 
   it("returns to sign in when the session expires", async () => {

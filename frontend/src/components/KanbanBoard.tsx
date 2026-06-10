@@ -23,6 +23,7 @@ const collisionDetection: CollisionDetection = (args) => {
   return hits.length > 0 ? hits : closestCorners(args);
 };
 import { AiChatSidebar } from "@/components/AiChatSidebar";
+import { CardDetailModal } from "@/components/CardDetailModal";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { ApiError, fetchBoard, saveBoard } from "@/lib/api";
@@ -32,6 +33,7 @@ import {
   initialData,
   moveCard,
   type BoardData,
+  type Card,
 } from "@/lib/kanban";
 
 type KanbanBoardProps = {
@@ -64,6 +66,7 @@ export const KanbanBoard = ({
   const [saveError, setSaveError] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const saveRequestId = useRef(0);
   const dragStartY = useRef<number | null>(null);
   const renameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -220,6 +223,17 @@ export const KanbanBoard = ({
     });
   };
 
+  const handleSaveCard = (updates: Pick<Card, "title" | "details" | "priority">) => {
+    if (!editingCardId) return;
+    commitBoard({
+      ...board,
+      cards: {
+        ...board.cards,
+        [editingCardId]: { ...board.cards[editingCardId], ...updates },
+      },
+    });
+  };
+
   const handleAiBoardUpdate = (nextBoard: BoardData) => {
     setBoard(nextBoard);
     setSaveError("");
@@ -345,6 +359,7 @@ export const KanbanBoard = ({
                   onRename={handleRenameColumn}
                   onAddCard={handleAddCard}
                   onDeleteCard={handleDeleteCard}
+                  onEditCard={setEditingCardId}
                 />
               ))}
             </section>
@@ -357,6 +372,14 @@ export const KanbanBoard = ({
             ) : null}
           </DragOverlay>
         </DndContext>
+
+        {editingCardId && board.cards[editingCardId] ? (
+          <CardDetailModal
+            card={board.cards[editingCardId]}
+            onSave={handleSaveCard}
+            onClose={() => setEditingCardId(null)}
+          />
+        ) : null}
 
         {isChatOpen ? (
           <>

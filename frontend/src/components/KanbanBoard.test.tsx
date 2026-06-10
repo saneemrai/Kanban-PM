@@ -178,6 +178,48 @@ describe("KanbanBoard", () => {
     expect(screen.getByText("AI-created card")).toBeVisible();
   });
 
+  it("opens card edit modal and saves updated title and priority", async () => {
+    const fetchMock = mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
+
+    await screen.findAllByTestId(/column-/i);
+
+    const editButton = screen.getAllByRole("button", { name: /edit /i })[0];
+    await userEvent.click(editButton);
+
+    expect(screen.getByRole("dialog", { name: /edit card/i })).toBeVisible();
+
+    const titleInput = screen.getByDisplayValue("Align roadmap themes");
+    await userEvent.clear(titleInput);
+    await userEvent.type(titleInput, "Updated title");
+
+    await userEvent.click(screen.getByRole("button", { name: "High" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("Updated title")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/boards/1/data",
+      expect.objectContaining({ method: "PUT" })
+    );
+  });
+
+  it("shows priority badge on cards that have one", async () => {
+    const boardWithPriority = {
+      ...initialData,
+      cards: {
+        ...initialData.cards,
+        "card-1": { ...initialData.cards["card-1"], priority: "critical" as const },
+      },
+    };
+    mockBoardFetch(boardWithPriority);
+    render(<KanbanBoard {...defaultProps} />);
+
+    await screen.findAllByTestId(/column-/i);
+
+    expect(screen.getByText("critical")).toBeInTheDocument();
+  });
+
   it("shows back-to-boards button and calls handler on click", async () => {
     const onBackToBoards = vi.fn();
     render(<KanbanBoard {...defaultProps} onBackToBoards={onBackToBoards} />);
