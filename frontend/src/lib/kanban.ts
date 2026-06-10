@@ -20,6 +20,7 @@ export const columnEndDropId = (columnId: string) => `${columnId}__end`;
 const getColumnIdFromEndDropId = (id: string) =>
   id.endsWith("__end") ? id.slice(0, -"__end".length) : null;
 
+// Keep in sync with backend/app/board_store.py DEFAULT_BOARD
 export const initialData: BoardData = {
   columns: [
     { id: "col-backlog", title: "Backlog", cardIds: ["card-1", "card-2"] },

@@ -217,6 +217,7 @@ test("expires the current browser when the user signs in elsewhere", async ({
 test("uses AI chat to update the board", async ({ page }) => {
   await signIn(page);
 
+  await page.getByRole("button", { name: /chat/i }).click();
   await page.getByLabel("Message").fill("Add a launch checklist card.");
   await page.getByRole("button", { name: "Send" }).click();
 

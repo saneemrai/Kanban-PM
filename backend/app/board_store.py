@@ -48,6 +48,7 @@ class LoginPayload(BaseModel):
     password: str
 
 
+# Keep in sync with frontend/src/lib/kanban.ts initialData
 DEFAULT_COLUMNS = [
     Column(id="col-backlog", title="Backlog", cardIds=["card-1", "card-2"]),
     Column(id="col-discovery", title="Discovery", cardIds=["card-3"]),

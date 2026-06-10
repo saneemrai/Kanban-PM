@@ -48,8 +48,10 @@ def load_root_env(root: Path | None = None) -> None:
         os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
 
 
+load_root_env()
+
+
 def get_openrouter_api_key() -> str:
-    load_root_env()
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         raise HTTPException(

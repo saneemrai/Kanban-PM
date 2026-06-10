@@ -105,6 +105,7 @@ describe("KanbanBoard", () => {
     render(<KanbanBoard sessionToken="session-1" />);
 
     await screen.findByRole("heading", { name: "Kanban Studio" });
+    await userEvent.click(screen.getByRole("button", { name: /chat/i }));
     await userEvent.type(screen.getByLabelText("Message"), "Summarize the board.");
     await userEvent.click(screen.getByRole("button", { name: "Send" }));
 
@@ -152,6 +153,7 @@ describe("KanbanBoard", () => {
     render(<KanbanBoard sessionToken="session-1" />);
 
     await screen.findByRole("heading", { name: "Kanban Studio" });
+    await userEvent.click(screen.getByRole("button", { name: /chat/i }));
     await userEvent.type(screen.getByLabelText("Message"), "Add an AI card.");
     await userEvent.click(screen.getByRole("button", { name: "Send" }));
 

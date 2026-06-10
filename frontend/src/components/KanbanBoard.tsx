@@ -8,9 +8,20 @@ import {
   useSensor,
   useSensors,
   closestCorners,
+  pointerWithin,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+
+// pointerWithin returns droppables that contain the pointer, sorted by closest-edge
+// distance (most specific target first). This correctly identifies an empty column
+// section when the pointer is inside it, rather than picking a corner-close card in
+// an adjacent column as closestCorners would.
+const collisionDetection: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  return hits.length > 0 ? hits : closestCorners(args);
+};
 import { AiChatSidebar } from "@/components/AiChatSidebar";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
@@ -46,8 +57,10 @@ export const KanbanBoard = ({
   const [loadError, setLoadError] = useState("");
   const [saveError, setSaveError] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const saveRequestId = useRef(0);
   const dragStartY = useRef<number | null>(null);
+  const renameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -164,12 +177,16 @@ export const KanbanBoard = ({
   };
 
   const handleRenameColumn = (columnId: string, title: string) => {
-    commitBoard({
+    const nextBoard = {
       ...board,
       columns: board.columns.map((column) =>
         column.id === columnId ? { ...column, title } : column
       ),
-    });
+    };
+    setBoard(nextBoard);
+    if (!sessionToken) return;
+    if (renameTimer.current) clearTimeout(renameTimer.current);
+    renameTimer.current = setTimeout(() => commitBoard(nextBoard), 400);
   };
 
   const handleAddCard = (columnId: string, title: string, details: string) => {
@@ -283,15 +300,26 @@ export const KanbanBoard = ({
               <p className="mt-2 text-lg font-semibold text-[var(--primary-blue)]">
                 One board. Five columns. Zero clutter.
               </p>
-              {onLogout ? (
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  className="mt-4 rounded-full bg-[var(--secondary-purple)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:brightness-110"
-                >
-                  Log out
-                </button>
-              ) : null}
+              <div className="mt-4 flex flex-wrap gap-3">
+                {sessionToken ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsChatOpen(true)}
+                    className="rounded-full bg-[var(--primary-blue)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:brightness-110"
+                  >
+                    Chat
+                  </button>
+                ) : null}
+                {onLogout ? (
+                  <button
+                    type="button"
+                    onClick={onLogout}
+                    className="rounded-full bg-[var(--secondary-purple)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:brightness-110"
+                  >
+                    Log out
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-4">
@@ -307,10 +335,9 @@ export const KanbanBoard = ({
           </div>
         </header>
 
-        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <DndContext
+        <DndContext
             sensors={sensors}
-            collisionDetection={closestCorners}
+            collisionDetection={collisionDetection}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
@@ -334,14 +361,22 @@ export const KanbanBoard = ({
               ) : null}
             </DragOverlay>
           </DndContext>
-          {sessionToken ? (
-            <AiChatSidebar
-              sessionToken={sessionToken}
-              onBoardUpdate={handleAiBoardUpdate}
-              onSessionExpired={onSessionExpired}
-            />
+          {sessionToken && isChatOpen ? (
+            <>
+              <div
+                className="fixed inset-0 z-40 bg-black/10"
+                onClick={() => setIsChatOpen(false)}
+              />
+              <div className="fixed bottom-0 right-0 top-0 z-50 w-full sm:w-[380px]">
+                <AiChatSidebar
+                  sessionToken={sessionToken}
+                  onBoardUpdate={handleAiBoardUpdate}
+                  onSessionExpired={onSessionExpired}
+                  onClose={() => setIsChatOpen(false)}
+                />
+              </div>
+            </>
           ) : null}
-        </div>
       </main>
     </div>
   );

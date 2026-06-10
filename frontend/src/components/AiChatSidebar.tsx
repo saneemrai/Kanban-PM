@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ApiError,
   sendAiChatMessage,
@@ -12,17 +12,26 @@ type AiChatSidebarProps = {
   sessionToken: string;
   onBoardUpdate: (board: BoardData) => void;
   onSessionExpired?: () => void;
+  onClose?: () => void;
 };
 
 export const AiChatSidebar = ({
   sessionToken,
   onBoardUpdate,
   onSessionExpired,
+  onClose,
 }: AiChatSidebarProps) => {
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState("");
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      bottomRef.current?.scrollIntoView?.({ behavior: "smooth" });
+    }
+  }, [messages]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -58,14 +67,26 @@ export const AiChatSidebar = ({
   };
 
   return (
-    <aside className="flex min-h-[520px] flex-col border border-[var(--stroke)] bg-white shadow-[var(--shadow)] lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)]">
-      <div className="border-b border-[var(--stroke)] px-5 py-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
-          AI assistant
-        </p>
-        <h2 className="mt-2 font-display text-2xl font-semibold text-[var(--navy-dark)]">
-          Project chat
-        </h2>
+    <aside className="flex h-full flex-col border-l border-[var(--stroke)] bg-white shadow-[var(--shadow)]">
+      <div className="flex items-start justify-between border-b border-[var(--stroke)] px-5 py-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
+            AI assistant
+          </p>
+          <h2 className="mt-2 font-display text-2xl font-semibold text-[var(--navy-dark)]">
+            Project chat
+          </h2>
+        </div>
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close chat"
+            className="rounded-full border border-[var(--stroke)] px-3 py-1 text-xs font-semibold text-[var(--gray-text)] transition hover:text-[var(--navy-dark)]"
+          >
+            Close
+          </button>
+        ) : null}
       </div>
 
       <div
@@ -99,6 +120,7 @@ export const AiChatSidebar = ({
             {error}
           </p>
         ) : null}
+        <div ref={bottomRef} />
       </div>
 
       <form

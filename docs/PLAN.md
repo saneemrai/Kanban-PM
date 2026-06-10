@@ -264,3 +264,31 @@ Success criteria:
 - [x] The AI can update the persisted Kanban board through the backend.
 - [x] The UI refreshes automatically after AI updates.
 - [x] The completed MVP runs locally in Docker.
+
+## Part 11: Chat Layout Improvement
+
+Goal: replace the inline chat sidebar (which shrank the five Kanban columns) with a right slide-out panel that leaves the board full width.
+
+Checklist:
+- [x] Remove the two-column grid that shared space between the board and the chat sidebar.
+- [x] Restore the Kanban board to a full-width five-column grid on desktop.
+- [x] Add a `Chat` button in the board header that opens the panel.
+- [x] Render `AiChatSidebar` as a fixed right-side panel (380 px on desktop, full width on mobile) overlaid above the board.
+- [x] Add a backdrop element behind the panel that closes it on click.
+- [x] Add a `Close` button inside the chat panel header.
+- [x] Pass `onClose` prop through to `AiChatSidebar` and wire up the close button.
+- [x] Add `min-w-0` to the card text container so `Remove` stays inside the card at narrow widths.
+- [x] Update Playwright test to open the chat panel before sending a message.
+- [x] Update Vitest component tests to open the chat panel before interacting with the AI chat form.
+
+Tests:
+- [x] All 20 backend tests pass.
+- [x] All 18 frontend unit/component tests pass (including updated AI chat tests).
+- [x] All 9 Playwright e2e tests pass (including updated AI chat test).
+
+Success criteria:
+- [x] The five columns are readable on desktop with the chat panel closed.
+- [x] Opening the chat panel does not shrink the board columns.
+- [x] `Remove` stays inside each card at narrow column widths.
+- [x] AI chat can still send a message and apply a board update through the slide-out panel.
+- [x] All existing Kanban interactions continue to pass.

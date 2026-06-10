@@ -26,6 +26,7 @@ STATIC_DIR = Path(__file__).parent / "static"
 def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -> FastAPI:
     app = FastAPI(title="Project Management API")
     app.state.db_path = db_path
+    initialize_database(db_path)
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
@@ -43,7 +44,6 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
         payload: AiChatPayload,
         x_pm_session: str | None = Header(default=None),
     ):
-        initialize_database(app.state.db_path)
         username = get_username_for_session(app.state.db_path, x_pm_session)
         board = get_board(app.state.db_path, username)
         ai_response = call_ai_chat(payload, board)
@@ -72,7 +72,6 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
 
     @app.post("/api/login")
     def login(payload: LoginPayload):
-        initialize_database(app.state.db_path)
         token = create_session(
             app.state.db_path,
             payload.username,
@@ -82,26 +81,22 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
 
     @app.post("/api/logout")
     def logout(x_pm_session: str | None = Header(default=None)):
-        initialize_database(app.state.db_path)
         if x_pm_session is not None:
             delete_session(app.state.db_path, x_pm_session)
         return {"status": "ok"}
 
     @app.get("/api/session")
     def read_session(x_pm_session: str | None = Header(default=None)):
-        initialize_database(app.state.db_path)
         username = get_username_for_session(app.state.db_path, x_pm_session)
         return {"username": username}
 
     @app.get("/api/board")
     def read_board(x_pm_session: str | None = Header(default=None)):
-        initialize_database(app.state.db_path)
         username = get_username_for_session(app.state.db_path, x_pm_session)
         return get_board(app.state.db_path, username).model_dump()
 
     @app.put("/api/board")
     def update_board(payload: dict, x_pm_session: str | None = Header(default=None)):
-        initialize_database(app.state.db_path)
         username = get_username_for_session(app.state.db_path, x_pm_session)
         return save_board(app.state.db_path, username, payload).model_dump()
 
