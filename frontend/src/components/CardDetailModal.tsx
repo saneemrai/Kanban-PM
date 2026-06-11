@@ -13,10 +13,12 @@ import {
   listComments,
   listChecklist,
   toggleChecklistItem,
+  type BoardLabel,
   type CardLinkEntry,
   type ChecklistItem,
   type Comment,
 } from "@/lib/api";
+import { labelColorClass } from "@/components/LabelsDrawer";
 
 const PRIORITIES: { value: Priority; label: string }[] = [
   { value: "low", label: "Low" },
@@ -62,6 +64,7 @@ type CardDetailModalProps = {
   boardId: number;
   username?: string;
   allCards?: Record<string, Card>;
+  boardLabels?: BoardLabel[];
   onSave: (updates: Pick<Card, "title" | "details" | "priority" | "due_date" | "labels" | "estimate" | "assignee" | "color">) => void;
   onClose: () => void;
 };
@@ -72,6 +75,7 @@ export const CardDetailModal = ({
   boardId,
   username,
   allCards,
+  boardLabels = [],
   onSave,
   onClose,
 }: CardDetailModalProps) => {
@@ -334,37 +338,63 @@ export const CardDetailModal = ({
             </div>
             <div>
               <p className="text-sm font-semibold text-[var(--navy-dark)]">Labels</p>
+              {boardLabels.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {boardLabels.map((bl) => {
+                    const active = labels.includes(bl.name);
+                    return (
+                      <button
+                        key={bl.id}
+                        type="button"
+                        onClick={() =>
+                          active
+                            ? setLabels(labels.filter((l) => l !== bl.name))
+                            : labels.length < 10 && setLabels([...labels, bl.name])
+                        }
+                        aria-pressed={active}
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition ${labelColorClass(bl.color)} ${active ? "ring-2 ring-offset-1 ring-[var(--primary-blue)]" : "opacity-60 hover:opacity-100"}`}
+                      >
+                        {bl.name}
+                        {active ? <span aria-hidden="true">✓</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
               <div
                 className="mt-2 flex min-h-[40px] flex-wrap gap-1.5 rounded border border-[var(--stroke)] px-3 py-2 transition focus-within:border-[var(--primary-blue)] cursor-text"
                 onClick={() => labelInputRef.current?.focus()}
                 aria-label="Labels"
               >
-                {labels.map((label) => (
-                  <span
-                    key={label}
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${labelColor(label)}`}
-                  >
-                    {label}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLabels(labels.filter((l) => l !== label));
-                      }}
-                      aria-label={`Remove label ${label}`}
-                      className="hover:opacity-70"
+                {labels.map((label) => {
+                  const palette = boardLabels.find((bl) => bl.name === label);
+                  return (
+                    <span
+                      key={label}
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${palette ? labelColorClass(palette.color) : labelColor(label)}`}
                     >
-                      ×
-                    </button>
-                  </span>
-                ))}
+                      {label}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLabels(labels.filter((l) => l !== label));
+                        }}
+                        aria-label={`Remove label ${label}`}
+                        className="hover:opacity-70"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
                 <input
                   ref={labelInputRef}
                   value={labelInput}
                   onChange={(e) => setLabelInput(e.target.value)}
                   onKeyDown={handleLabelKeyDown}
                   onBlur={() => { if (labelInput.trim()) addLabel(labelInput); }}
-                  placeholder={labels.length === 0 ? "Type a label and press Enter" : ""}
+                  placeholder={labels.length === 0 ? "Type a label or pick from palette" : ""}
                   aria-label="Add label"
                   className="min-w-[120px] flex-1 bg-transparent text-sm font-medium text-[var(--navy-dark)] outline-none placeholder:text-[var(--gray-text)]"
                 />

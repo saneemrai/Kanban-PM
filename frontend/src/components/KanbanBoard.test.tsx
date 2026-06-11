@@ -63,6 +63,19 @@ const mockBoardFetch = (board: BoardData = initialData) => {
     if (url.includes("/api/user/sessions/")) {
       return new Response(null, { status: 204 });
     }
+    if (url.includes("/labels") && init?.method === "POST") {
+      const body = JSON.parse(init.body as string);
+      return new Response(
+        JSON.stringify({ id: 1, name: body.name, color: body.color }),
+        { status: 201, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("/labels") && init?.method === "DELETE") {
+      return new Response(null, { status: 204 });
+    }
+    if (url.includes("/labels")) {
+      return Response.json([]);
+    }
     if (url.includes("/links") && init?.method === "POST") {
       return new Response(
         JSON.stringify({ blocking: [], blockedBy: [] }),
@@ -599,6 +612,59 @@ describe("KanbanBoard", () => {
     const stats = screen.getByRole("region", { name: /board statistics/i });
     expect(within(stats).getByText(/^25$/)).toBeInTheDocument();
     expect(within(stats).getByText(/done sp/i)).toBeInTheDocument();
+  });
+
+  it("opens label palette drawer from header button", async () => {
+    mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getByRole("button", { name: /open label palette/i }));
+
+    expect(await screen.findByRole("dialog", { name: /label palette/i })).toBeVisible();
+    expect(screen.getByLabelText("New label name")).toBeInTheDocument();
+  });
+
+  it("adds a label in the palette drawer", async () => {
+    mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getByRole("button", { name: /open label palette/i }));
+    await screen.findByRole("dialog", { name: /label palette/i });
+
+    await userEvent.type(screen.getByLabelText("New label name"), "Backend");
+    await userEvent.click(screen.getByRole("button", { name: "Add label" }));
+
+    expect(await screen.findByText("Backend")).toBeInTheDocument();
+  });
+
+  it("shows palette label chips in card detail modal when board has labels", async () => {
+    const boardWithLabels = initialData;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/data") && init?.method === "PUT") {
+        return Response.json(JSON.parse(init.body as string));
+      }
+      if (url.includes("/data")) return Response.json(boardWithLabels);
+      if (url.includes("/labels") && !init?.method) {
+        return Response.json([{ id: 1, name: "Frontend", color: "blue" }]);
+      }
+      if (url.includes("/labels")) return Response.json({ id: 1, name: "Frontend", color: "blue" });
+      if (url.includes("/comments")) return Response.json([]);
+      if (url.includes("/checklist")) return Response.json([]);
+      if (url.includes("/links")) return Response.json({ blocking: [], blockedBy: [] });
+      if (url.includes("/activity")) return Response.json([]);
+      if (url === "/api/user/sessions") return Response.json([{ id: 1, createdAt: new Date().toISOString(), isCurrent: true }]);
+      return Response.json(boardWithLabels);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getAllByRole("button", { name: /edit /i })[0]);
+    expect(screen.getByRole("button", { name: "Frontend", pressed: false })).toBeInTheDocument();
   });
 
   it("moves a card to another column via quick-move menu", async () => {

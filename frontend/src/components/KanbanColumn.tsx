@@ -5,6 +5,7 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { columnEndDropId, type Card, type Column, type Priority } from "@/lib/kanban";
 import { KanbanCard } from "@/components/KanbanCard";
 import { NewCardForm } from "@/components/NewCardForm";
+import type { BoardLabel } from "@/lib/api";
 
 type KanbanColumnProps = {
   column: Column;
@@ -19,6 +20,7 @@ type KanbanColumnProps = {
   onSetWipLimit?: (columnId: string, limit: number | null) => void;
   onMoveCard?: (cardId: string, toColumnId: string) => void;
   allColumns?: { id: string; title: string }[];
+  boardLabels?: BoardLabel[];
 };
 
 export const KanbanColumn = ({
@@ -34,6 +36,7 @@ export const KanbanColumn = ({
   onSetWipLimit,
   onMoveCard,
   allColumns,
+  boardLabels,
 }: KanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const { setNodeRef: setEndDropRef, isOver: isEndOver } = useDroppable({
@@ -183,6 +186,7 @@ export const KanbanColumn = ({
               onDuplicate={onDuplicateCard ? (cardId) => onDuplicateCard(column.id, cardId) : undefined}
               onMove={onMoveCard ? (toColumnId) => onMoveCard(card.id, toColumnId) : undefined}
               otherColumns={allColumns ? allColumns.filter((c) => c.id !== column.id) : undefined}
+              boardLabels={boardLabels}
             />
           ))}
         </SortableContext>

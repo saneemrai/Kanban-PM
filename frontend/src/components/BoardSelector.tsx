@@ -308,11 +308,16 @@ export const BoardSelector = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-yellow)]" />
                     <span className="text-xs font-medium text-[var(--gray-text)]">
                       {board.cardCount} {board.cardCount === 1 ? "card" : "cards"}
                     </span>
+                    {board.overdueCount > 0 ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">
+                        {board.overdueCount} overdue
+                      </span>
+                    ) : null}
                   </div>
 
                   <button

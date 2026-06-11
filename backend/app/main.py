@@ -12,6 +12,7 @@ from app.board_store import (
     BoardSummary,
     LoginPayload,
     RegisterPayload,
+    add_board_label,
     add_card_comment,
     add_card_link,
     add_checklist_item,
@@ -21,6 +22,7 @@ from app.board_store import (
     create_board,
     create_session,
     delete_board,
+    delete_board_label,
     delete_card_comment,
     delete_card_link,
     delete_checklist_item,
@@ -31,6 +33,7 @@ from app.board_store import (
     initialize_database,
     list_activity,
     list_archived_cards,
+    list_board_labels,
     list_boards,
     list_card_comments,
     list_card_links,
@@ -43,6 +46,7 @@ from app.board_store import (
     save_board,
     save_board_by_id,
     search_boards_and_cards,
+    update_board_label,
     update_checklist_item,
     _get_first_board_id,
 )
@@ -84,6 +88,48 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
     def read_session(x_pm_session: str | None = Header(default=None)):
         username = get_username_for_session(app.state.db_path, x_pm_session)
         return {"username": username}
+
+    @app.get("/api/boards/{board_id}/labels")
+    def read_board_labels(
+        board_id: int,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        return list_board_labels(app.state.db_path, username, board_id)
+
+    @app.post("/api/boards/{board_id}/labels", status_code=201)
+    def create_board_label(
+        board_id: int,
+        payload: dict,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        return add_board_label(
+            app.state.db_path, username, board_id,
+            payload.get("name", ""), payload.get("color", "blue")
+        )
+
+    @app.patch("/api/boards/{board_id}/labels/{label_id}")
+    def edit_board_label(
+        board_id: int,
+        label_id: int,
+        payload: dict,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        return update_board_label(
+            app.state.db_path, username, board_id, label_id,
+            payload.get("name"), payload.get("color")
+        )
+
+    @app.delete("/api/boards/{board_id}/labels/{label_id}", status_code=204)
+    def remove_board_label(
+        board_id: int,
+        label_id: int,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        delete_board_label(app.state.db_path, username, board_id, label_id)
 
     @app.get("/api/search")
     def search(

@@ -3,6 +3,8 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
 import type { Card, Priority } from "@/lib/kanban";
+import type { BoardLabel } from "@/lib/api";
+import { labelColorClass } from "@/components/LabelsDrawer";
 
 const CARD_COLORS: Record<string, string> = {
   red: "border-l-4 border-l-red-400",
@@ -67,9 +69,10 @@ type KanbanCardProps = {
   onDuplicate?: (cardId: string) => void;
   onMove?: (targetColumnId: string) => void;
   otherColumns?: { id: string; title: string }[];
+  boardLabels?: BoardLabel[];
 };
 
-export const KanbanCard = ({ card, onDelete, onEdit, onArchive, onDuplicate, onMove, otherColumns }: KanbanCardProps) => {
+export const KanbanCard = ({ card, onDelete, onEdit, onArchive, onDuplicate, onMove, otherColumns, boardLabels = [] }: KanbanCardProps) => {
   const [moveMenuOpen, setMoveMenuOpen] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: card.id });
@@ -97,17 +100,20 @@ export const KanbanCard = ({ card, onDelete, onEdit, onArchive, onDuplicate, onM
         <div className="min-w-0 flex-1">
           {card.labels && card.labels.length > 0 ? (
             <div className="mb-1.5 flex flex-wrap gap-1">
-              {card.labels.map((label) => (
-                <span
-                  key={label}
-                  className={clsx(
-                    "inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                    labelColor(label)
-                  )}
-                >
-                  {label}
-                </span>
-              ))}
+              {card.labels.map((label) => {
+                const palette = boardLabels.find((bl) => bl.name === label);
+                return (
+                  <span
+                    key={label}
+                    className={clsx(
+                      "inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                      palette ? labelColorClass(palette.color) : labelColor(label)
+                    )}
+                  >
+                    {label}
+                  </span>
+                );
+              })}
             </div>
           ) : null}
           <div className="mb-1.5 flex flex-wrap gap-1">

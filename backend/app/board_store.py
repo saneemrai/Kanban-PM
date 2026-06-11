@@ -23,7 +23,7 @@ FIXED_COLUMN_IDS = [
     "col-done",
 ]
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 
 
 VALID_PRIORITIES = {"low", "medium", "high", "critical"}
@@ -72,6 +72,7 @@ class BoardSummary(BaseModel):
     title: str
     description: str
     cardCount: int
+    overdueCount: int
     updatedAt: str
 
 
@@ -288,6 +289,10 @@ def _run_migrations(connection: sqlite3.Connection) -> None:
         _migrate_to_v16(connection)
         connection.execute("UPDATE schema_version SET version = 16")
 
+    if version < 17:
+        _migrate_to_v17(connection)
+        connection.execute("UPDATE schema_version SET version = 17")
+
 
 def _migrate_to_v2(connection: sqlite3.Connection) -> None:
     connection.execute(
@@ -414,6 +419,21 @@ def _migrate_to_v4(connection: sqlite3.Connection) -> None:
     }
     if "due_date" not in card_cols:
         connection.execute("ALTER TABLE cards ADD COLUMN due_date TEXT")
+
+
+def _migrate_to_v17(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS board_labels (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            board_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            color TEXT NOT NULL DEFAULT 'blue',
+            FOREIGN KEY (board_id) REFERENCES boards (id) ON DELETE CASCADE,
+            UNIQUE (board_id, name)
+        )
+        """
+    )
 
 
 def _migrate_to_v16(connection: sqlite3.Connection) -> None:
@@ -818,7 +838,9 @@ def list_boards(db_path: Path, username: str) -> list[BoardSummary]:
         rows = connection.execute(
             """
             SELECT b.id, b.title, b.description, b.updated_at,
-                   COUNT(c.id) AS card_count
+                   COUNT(c.id) AS card_count,
+                   SUM(CASE WHEN c.due_date IS NOT NULL AND c.due_date < date('now')
+                            AND c.archived = 0 THEN 1 ELSE 0 END) AS overdue_count
             FROM boards b
             JOIN users u ON u.id = b.user_id
             LEFT JOIN cards c ON c.board_id = b.id
@@ -834,6 +856,7 @@ def list_boards(db_path: Path, username: str) -> list[BoardSummary]:
             title=row["title"],
             description=row["description"] or "",
             cardCount=row["card_count"],
+            overdueCount=row["overdue_count"] or 0,
             updatedAt=row["updated_at"],
         )
         for row in rows
@@ -869,6 +892,7 @@ def create_board(db_path: Path, username: str, title: str, template: str = "defa
         title=row["title"],
         description=row["description"] or "",
         cardCount=row["card_count"],
+        overdueCount=0,
         updatedAt=row["updated_at"],
     )
 
@@ -1555,6 +1579,75 @@ def delete_card_link(
             (board_id, from_card_id, to_card_id),
         )
     return list_card_links(db_path, username, board_id, from_card_id)
+
+
+_VALID_LABEL_COLORS = {"red", "orange", "yellow", "green", "blue", "purple", "pink", "gray"}
+
+
+def list_board_labels(db_path: Path, username: str, board_id: int) -> list[dict]:
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        rows = connection.execute(
+            "SELECT id, name, color FROM board_labels WHERE board_id = ? ORDER BY name",
+            (board_id,),
+        ).fetchall()
+    return [{"id": row["id"], "name": row["name"], "color": row["color"]} for row in rows]
+
+
+def add_board_label(db_path: Path, username: str, board_id: int, name: str, color: str) -> dict:
+    name = name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Label name is required.")
+    if color not in _VALID_LABEL_COLORS:
+        raise HTTPException(status_code=422, detail=f"Invalid color '{color}'.")
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        try:
+            cursor = connection.execute(
+                "INSERT INTO board_labels (board_id, name, color) VALUES (?, ?, ?)",
+                (board_id, name, color),
+            )
+            label_id = cursor.lastrowid
+        except sqlite3.IntegrityError as err:
+            raise HTTPException(status_code=409, detail="A label with that name already exists.") from err
+    return {"id": label_id, "name": name, "color": color}
+
+
+def delete_board_label(db_path: Path, username: str, board_id: int, label_id: int) -> None:
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        row = connection.execute(
+            "SELECT id FROM board_labels WHERE id = ? AND board_id = ?",
+            (label_id, board_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Label not found.")
+        connection.execute("DELETE FROM board_labels WHERE id = ?", (label_id,))
+
+
+def update_board_label(db_path: Path, username: str, board_id: int, label_id: int, name: str | None, color: str | None) -> dict:
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        row = connection.execute(
+            "SELECT id, name, color FROM board_labels WHERE id = ? AND board_id = ?",
+            (label_id, board_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Label not found.")
+        new_name = name.strip() if name is not None else row["name"]
+        new_color = color if color is not None else row["color"]
+        if not new_name:
+            raise HTTPException(status_code=422, detail="Label name is required.")
+        if new_color not in _VALID_LABEL_COLORS:
+            raise HTTPException(status_code=422, detail=f"Invalid color '{new_color}'.")
+        try:
+            connection.execute(
+                "UPDATE board_labels SET name = ?, color = ? WHERE id = ?",
+                (new_name, new_color, label_id),
+            )
+        except sqlite3.IntegrityError as err:
+            raise HTTPException(status_code=409, detail="A label with that name already exists.") from err
+    return {"id": label_id, "name": new_name, "color": new_color}
 
 
 def search_boards_and_cards(db_path: Path, username: str, query: str) -> list[dict]:

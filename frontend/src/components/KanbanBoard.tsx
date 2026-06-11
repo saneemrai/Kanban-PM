@@ -31,7 +31,8 @@ import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 import { FilterBar, defaultFilter, isFilterActive, type FilterState } from "@/components/FilterBar";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
-import { ApiError, archiveCard, fetchBoard, updateBoardMeta, saveBoard } from "@/lib/api";
+import { LabelsDrawer } from "@/components/LabelsDrawer";
+import { ApiError, archiveCard, fetchBoard, listBoardLabels, updateBoardMeta, saveBoard, type BoardLabel } from "@/lib/api";
 import {
   columnEndDropId,
   createId,
@@ -82,6 +83,8 @@ export const KanbanBoard = ({
   const [filter, setFilter] = useState<FilterState>(defaultFilter);
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [isActivityOpen, setIsActivityOpen] = useState(false);
+  const [isLabelsOpen, setIsLabelsOpen] = useState(false);
+  const [boardLabels, setBoardLabels] = useState<BoardLabel[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [titleDraft, setTitleDraft] = useState(boardTitle);
   const [descriptionDraft, setDescriptionDraft] = useState(boardDescription);
@@ -114,10 +117,14 @@ export const KanbanBoard = ({
 
   useEffect(() => {
     let isCurrent = true;
-    fetchBoard(sessionToken, boardId)
-      .then((nextBoard) => {
+    Promise.all([
+      fetchBoard(sessionToken, boardId),
+      listBoardLabels(sessionToken, boardId).catch(() => [] as BoardLabel[]),
+    ])
+      .then(([nextBoard, labels]) => {
         if (isCurrent) {
           setBoard(nextBoard);
+          setBoardLabels(labels);
           setLoadError("");
         }
       })
@@ -566,6 +573,18 @@ export const KanbanBoard = ({
             </button>
             <button
               type="button"
+              onClick={() => setIsLabelsOpen(true)}
+              aria-label="Open label palette"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--stroke)] px-3 py-2 text-xs font-medium text-[var(--gray-text)] transition hover:bg-[var(--surface)]"
+            >
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path d="M1 1h5l7 7-5 5L1 6V1z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="3.5" cy="3.5" r="0.8" fill="currentColor"/>
+              </svg>
+              Labels
+            </button>
+            <button
+              type="button"
               onClick={() => setIsArchiveOpen(true)}
               aria-label="Open archive"
               className="inline-flex items-center gap-1.5 rounded-full border border-[var(--stroke)] px-3 py-2 text-xs font-medium text-[var(--gray-text)] transition hover:bg-[var(--surface)]"
@@ -644,6 +663,7 @@ export const KanbanBoard = ({
                     onSetWipLimit={handleSetWipLimit}
                     onMoveCard={(cardId, toColumnId) => handleMoveCard(cardId, column.id, toColumnId)}
                     allColumns={board.columns.map((c) => ({ id: c.id, title: c.title }))}
+                    boardLabels={boardLabels}
                   />
                 );
               })}
@@ -665,6 +685,7 @@ export const KanbanBoard = ({
             boardId={boardId}
             username={username}
             allCards={board.cards}
+            boardLabels={boardLabels}
             onSave={handleSaveCard}
             onClose={() => setEditingCardId(null)}
           />
@@ -675,6 +696,15 @@ export const KanbanBoard = ({
             sessionToken={sessionToken}
             onClose={() => setIsChangingPassword(false)}
             onSessionRevoked={onSessionExpired}
+          />
+        ) : null}
+
+        {isLabelsOpen ? (
+          <LabelsDrawer
+            sessionToken={sessionToken}
+            boardId={boardId}
+            onClose={() => setIsLabelsOpen(false)}
+            onLabelsChanged={setBoardLabels}
           />
         ) : null}
 

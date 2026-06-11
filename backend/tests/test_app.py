@@ -1990,6 +1990,133 @@ def test_sessions_require_session(tmp_path: Path) -> None:
 
 # --- Global search tests ---
 
+# --- Board label palette tests ---
+
+def test_board_labels_empty_initially(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    response = client.get(f"/api/boards/{board_id}/labels", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_board_label_can_be_created(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    response = client.post(
+        f"/api/boards/{board_id}/labels",
+        json={"name": "Frontend", "color": "blue"},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["name"] == "Frontend"
+    assert data["color"] == "blue"
+    assert "id" in data
+
+
+def test_board_label_appears_in_list(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    client.post(f"/api/boards/{board_id}/labels", json={"name": "Backend", "color": "green"}, headers=headers)
+
+    labels = client.get(f"/api/boards/{board_id}/labels", headers=headers).json()
+
+    assert any(l["name"] == "Backend" and l["color"] == "green" for l in labels)
+
+
+def test_board_label_duplicate_name_rejected(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    client.post(f"/api/boards/{board_id}/labels", json={"name": "Bug", "color": "red"}, headers=headers)
+
+    response = client.post(
+        f"/api/boards/{board_id}/labels",
+        json={"name": "Bug", "color": "orange"},
+        headers=headers,
+    )
+
+    assert response.status_code == 409
+
+
+def test_board_label_invalid_color_rejected(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    response = client.post(
+        f"/api/boards/{board_id}/labels",
+        json={"name": "Test", "color": "neon-chartreuse"},
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_board_label_can_be_deleted(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    label = client.post(
+        f"/api/boards/{board_id}/labels", json={"name": "ToDelete", "color": "gray"}, headers=headers
+    ).json()
+
+    response = client.delete(f"/api/boards/{board_id}/labels/{label['id']}", headers=headers)
+
+    assert response.status_code == 204
+    labels = client.get(f"/api/boards/{board_id}/labels", headers=headers).json()
+    assert not any(l["id"] == label["id"] for l in labels)
+
+
+def test_board_label_can_be_updated(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    label = client.post(
+        f"/api/boards/{board_id}/labels", json={"name": "Old", "color": "blue"}, headers=headers
+    ).json()
+
+    response = client.patch(
+        f"/api/boards/{board_id}/labels/{label['id']}",
+        json={"name": "New", "color": "red"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "New"
+    assert response.json()["color"] == "red"
+
+
+def test_board_labels_isolated_per_board(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    boards = client.get("/api/boards", headers=headers).json()
+    board_a = boards[0]["id"]
+    created = client.post("/api/boards", json={"title": "Board B"}, headers=headers).json()
+    board_b = created["id"]
+    client.post(f"/api/boards/{board_a}/labels", json={"name": "Tag A", "color": "blue"}, headers=headers)
+
+    labels_b = client.get(f"/api/boards/{board_b}/labels", headers=headers).json()
+
+    assert not any(l["name"] == "Tag A" for l in labels_b)
+
+
+def test_board_labels_require_session(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    assert client.get(f"/api/boards/{board_id}/labels").status_code == 401
+
+
 def test_search_requires_session(tmp_path: Path) -> None:
     client = make_client(tmp_path)
 
@@ -2050,6 +2177,44 @@ def test_search_does_not_return_results_from_other_users(tmp_path: Path) -> None
     assert response.status_code == 200
     results = response.json()
     assert not any("Secret" in r["boardTitle"] for r in results)
+
+
+def test_board_summary_includes_overdue_count(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    overdue_id = "card-overdue"
+    board["cards"][overdue_id] = {
+        "id": overdue_id,
+        "title": "Overdue card",
+        "details": "past due",
+        "due_date": "2020-01-01",
+    }
+    board["columns"][0]["cardIds"].append(overdue_id)
+    client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    boards = client.get("/api/boards", headers=headers).json()
+    matching = next(b for b in boards if b["id"] == board_id)
+
+    assert matching["overdueCount"] >= 1
+
+
+def test_board_summary_overdue_count_excludes_archived(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    board["cards"][card_id]["due_date"] = "2020-01-01"
+    client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+    client.post(f"/api/boards/{board_id}/cards/{card_id}/archive", headers=headers)
+
+    boards = client.get("/api/boards", headers=headers).json()
+    matching = next(b for b in boards if b["id"] == board_id)
+
+    assert matching["overdueCount"] == 0
 
 
 def test_search_does_not_return_archived_cards(tmp_path: Path) -> None:

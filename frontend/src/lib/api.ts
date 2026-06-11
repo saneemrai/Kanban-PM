@@ -30,6 +30,7 @@ export type BoardSummary = {
   title: string;
   description: string;
   cardCount: number;
+  overdueCount: number;
   updatedAt: string;
 };
 
@@ -418,6 +419,54 @@ export const listSessions = async (sessionToken: string): Promise<SessionInfo[]>
 
 export const revokeSession = async (sessionToken: string, sessionId: number): Promise<void> => {
   const response = await fetch(`/api/user/sessions/${sessionId}`, {
+    method: "DELETE",
+    headers: sessionHeaders(sessionToken),
+  });
+  if (!response.ok) {
+    throw new ApiError(`Request failed with status ${response.status}`, response.status);
+  }
+};
+
+export type BoardLabel = { id: number; name: string; color: string };
+
+export const LABEL_COLORS: { value: string; label: string }[] = [
+  { value: "blue", label: "Blue" },
+  { value: "green", label: "Green" },
+  { value: "red", label: "Red" },
+  { value: "orange", label: "Orange" },
+  { value: "yellow", label: "Yellow" },
+  { value: "purple", label: "Purple" },
+  { value: "pink", label: "Pink" },
+  { value: "gray", label: "Gray" },
+];
+
+export const listBoardLabels = async (sessionToken: string, boardId: number): Promise<BoardLabel[]> => {
+  const response = await fetch(`/api/boards/${boardId}/labels`, {
+    headers: sessionHeaders(sessionToken),
+  });
+  return parseResponse(response);
+};
+
+export const addBoardLabel = async (sessionToken: string, boardId: number, name: string, color: string): Promise<BoardLabel> => {
+  const response = await fetch(`/api/boards/${boardId}/labels`, {
+    method: "POST",
+    headers: { ...sessionHeaders(sessionToken), "Content-Type": "application/json" },
+    body: JSON.stringify({ name, color }),
+  });
+  return parseResponse(response);
+};
+
+export const updateBoardLabel = async (sessionToken: string, boardId: number, labelId: number, name?: string, color?: string): Promise<BoardLabel> => {
+  const response = await fetch(`/api/boards/${boardId}/labels/${labelId}`, {
+    method: "PATCH",
+    headers: { ...sessionHeaders(sessionToken), "Content-Type": "application/json" },
+    body: JSON.stringify({ name, color }),
+  });
+  return parseResponse(response);
+};
+
+export const deleteBoardLabel = async (sessionToken: string, boardId: number, labelId: number): Promise<void> => {
+  const response = await fetch(`/api/boards/${boardId}/labels/${labelId}`, {
     method: "DELETE",
     headers: sessionHeaders(sessionToken),
   });
