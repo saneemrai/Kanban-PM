@@ -30,6 +30,7 @@ from app.board_store import (
     delete_session,
     get_board,
     get_board_by_id,
+    get_board_stats,
     get_username_for_session,
     initialize_database,
     list_activity,
@@ -143,6 +144,14 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
     ):
         username = get_username_for_session(app.state.db_path, x_pm_session)
         delete_board_label(app.state.db_path, username, board_id, label_id)
+
+    @app.get("/api/boards/{board_id}/stats")
+    def read_board_stats(
+        board_id: int,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        return get_board_stats(app.state.db_path, username, board_id)
 
     @app.get("/api/search")
     def search(

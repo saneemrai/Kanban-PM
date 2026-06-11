@@ -485,6 +485,32 @@ export type SearchResult = {
   columnTitle: string | null;
 };
 
+export type ColumnStats = {
+  columnKey: string;
+  columnTitle: string;
+  cardCount: number;
+  totalPoints: number;
+};
+
+export type BoardStats = {
+  totalCards: number;
+  doneCards: number;
+  overdueCards: number;
+  completionRate: number;
+  totalPoints: number;
+  donePoints: number;
+  byColumn: ColumnStats[];
+  byPriority: Record<string, number>;
+  byAssignee: { assignee: string; count: number }[];
+};
+
+export const fetchBoardStats = async (sessionToken: string, boardId: number): Promise<BoardStats> => {
+  const response = await fetch(`/api/boards/${boardId}/stats`, {
+    headers: sessionHeaders(sessionToken),
+  });
+  return parseResponse(response);
+};
+
 export const cloneBoard = async (
   sessionToken: string,
   boardId: number,

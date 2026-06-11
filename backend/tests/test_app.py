@@ -2310,3 +2310,97 @@ def test_search_does_not_return_archived_cards(tmp_path: Path) -> None:
     results = response.json()
     card_results = [r for r in results if r["type"] == "card"]
     assert not any(r["cardId"] == card_id for r in card_results)
+
+
+# --- Board stats tests ---
+
+def test_board_stats_returns_expected_shape(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    response = client.get(f"/api/boards/{board_id}/stats", headers=headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "totalCards" in data
+    assert "doneCards" in data
+    assert "overdueCards" in data
+    assert "completionRate" in data
+    assert "totalPoints" in data
+    assert "donePoints" in data
+    assert "byColumn" in data
+    assert "byPriority" in data
+    assert "byAssignee" in data
+
+
+def test_board_stats_by_column_has_five_entries(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    data = client.get(f"/api/boards/{board_id}/stats", headers=headers).json()
+
+    assert len(data["byColumn"]) == 5
+    for col in data["byColumn"]:
+        assert "columnKey" in col
+        assert "columnTitle" in col
+        assert "cardCount" in col
+        assert "totalPoints" in col
+
+
+def test_board_stats_total_matches_sum_of_columns(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    data = client.get(f"/api/boards/{board_id}/stats", headers=headers).json()
+
+    column_sum = sum(col["cardCount"] for col in data["byColumn"])
+    assert column_sum == data["totalCards"]
+
+
+def test_board_stats_done_cards_uses_col_done(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board_data = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    done_count = len(board_data["columns"][-1]["cardIds"])
+
+    data = client.get(f"/api/boards/{board_id}/stats", headers=headers).json()
+
+    assert data["doneCards"] == done_count
+
+
+def test_board_stats_completion_rate_is_percentage(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    data = client.get(f"/api/boards/{board_id}/stats", headers=headers).json()
+
+    assert 0 <= data["completionRate"] <= 100
+
+
+def test_board_stats_assignee_breakdown(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board_data = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    card_id = list(board_data["cards"].keys())[0]
+    card = board_data["cards"][card_id]
+    card["assignee"] = "Alice"
+    client.put(f"/api/boards/{board_id}/data", json=board_data, headers=headers)
+
+    data = client.get(f"/api/boards/{board_id}/stats", headers=headers).json()
+
+    assignees = [a["assignee"] for a in data["byAssignee"]]
+    assert "Alice" in assignees
+
+
+def test_board_stats_requires_session(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    assert client.get(f"/api/boards/{board_id}/stats").status_code == 401

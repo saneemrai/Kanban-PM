@@ -26,6 +26,7 @@ import { ActivityDrawer } from "@/components/ActivityDrawer";
 import { AiChatSidebar } from "@/components/AiChatSidebar";
 import { ArchiveDrawer } from "@/components/ArchiveDrawer";
 import { BoardStats } from "@/components/BoardStats";
+import { BoardStatsDrawer } from "@/components/BoardStatsDrawer";
 import { CardDetailModal } from "@/components/CardDetailModal";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 import { FilterBar, defaultFilter, isFilterActive, type FilterState } from "@/components/FilterBar";
@@ -84,6 +85,7 @@ export const KanbanBoard = ({
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [isActivityOpen, setIsActivityOpen] = useState(false);
   const [isLabelsOpen, setIsLabelsOpen] = useState(false);
+  const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [boardLabels, setBoardLabels] = useState<BoardLabel[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [titleDraft, setTitleDraft] = useState(boardTitle);
@@ -573,6 +575,19 @@ export const KanbanBoard = ({
             </button>
             <button
               type="button"
+              onClick={() => setIsStatsOpen(true)}
+              aria-label="Open board statistics"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--stroke)] px-3 py-2 text-xs font-medium text-[var(--gray-text)] transition hover:bg-[var(--surface)]"
+            >
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <rect x="1" y="6" width="3" height="7" rx="0.5" stroke="currentColor" strokeWidth="1.3"/>
+                <rect x="5.5" y="3" width="3" height="10" rx="0.5" stroke="currentColor" strokeWidth="1.3"/>
+                <rect x="10" y="1" width="3" height="12" rx="0.5" stroke="currentColor" strokeWidth="1.3"/>
+              </svg>
+              Stats
+            </button>
+            <button
+              type="button"
               onClick={() => setIsLabelsOpen(true)}
               aria-label="Open label palette"
               className="inline-flex items-center gap-1.5 rounded-full border border-[var(--stroke)] px-3 py-2 text-xs font-medium text-[var(--gray-text)] transition hover:bg-[var(--surface)]"
@@ -705,6 +720,14 @@ export const KanbanBoard = ({
             boardId={boardId}
             onClose={() => setIsLabelsOpen(false)}
             onLabelsChanged={setBoardLabels}
+          />
+        ) : null}
+
+        {isStatsOpen ? (
+          <BoardStatsDrawer
+            sessionToken={sessionToken}
+            boardId={boardId}
+            onClose={() => setIsStatsOpen(false)}
           />
         ) : null}
 

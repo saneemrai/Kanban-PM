@@ -1712,6 +1712,83 @@ def update_board_label(db_path: Path, username: str, board_id: int, label_id: in
     return {"id": label_id, "name": new_name, "color": new_color}
 
 
+def get_board_stats(db_path: Path, username: str, board_id: int) -> dict:
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+
+        column_rows = connection.execute(
+            """
+            SELECT col.key, col.title,
+                   COUNT(c.id) AS card_count,
+                   COALESCE(SUM(c.estimate), 0) AS total_points
+            FROM columns col
+            LEFT JOIN cards c ON c.board_id = col.board_id AND c.column_key = col.key AND c.archived = 0
+            WHERE col.board_id = ?
+            GROUP BY col.key, col.title
+            ORDER BY col.position
+            """,
+            (board_id,),
+        ).fetchall()
+
+        priority_rows = connection.execute(
+            """
+            SELECT COALESCE(priority, 'none') AS priority, COUNT(*) AS count
+            FROM cards
+            WHERE board_id = ? AND archived = 0
+            GROUP BY priority
+            """,
+            (board_id,),
+        ).fetchall()
+
+        summary_row = connection.execute(
+            """
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN due_date IS NOT NULL AND due_date < date('now') THEN 1 ELSE 0 END) AS overdue,
+                SUM(CASE WHEN column_key = 'col-done' THEN 1 ELSE 0 END) AS done_count,
+                COALESCE(SUM(estimate), 0) AS total_points,
+                COALESCE(SUM(CASE WHEN column_key = 'col-done' THEN estimate ELSE 0 END), 0) AS done_points
+            FROM cards
+            WHERE board_id = ? AND archived = 0
+            """,
+            (board_id,),
+        ).fetchone()
+
+        assignee_rows = connection.execute(
+            """
+            SELECT assignee, COUNT(*) AS count
+            FROM cards
+            WHERE board_id = ? AND archived = 0 AND assignee IS NOT NULL AND assignee != ''
+            GROUP BY assignee
+            ORDER BY count DESC
+            LIMIT 10
+            """,
+            (board_id,),
+        ).fetchall()
+
+    total = summary_row["total"] or 0
+    done = summary_row["done_count"] or 0
+    return {
+        "totalCards": total,
+        "doneCards": done,
+        "overdueCards": summary_row["overdue"] or 0,
+        "completionRate": round(done / total * 100) if total > 0 else 0,
+        "totalPoints": summary_row["total_points"] or 0,
+        "donePoints": summary_row["done_points"] or 0,
+        "byColumn": [
+            {
+                "columnKey": row["key"],
+                "columnTitle": row["title"],
+                "cardCount": row["card_count"],
+                "totalPoints": row["total_points"],
+            }
+            for row in column_rows
+        ],
+        "byPriority": {row["priority"]: row["count"] for row in priority_rows},
+        "byAssignee": [{"assignee": row["assignee"], "count": row["count"]} for row in assignee_rows],
+    }
+
+
 def search_boards_and_cards(db_path: Path, username: str, query: str) -> list[dict]:
     query = query.strip()
     if len(query) < 2:

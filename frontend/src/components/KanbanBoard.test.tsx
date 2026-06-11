@@ -88,6 +88,24 @@ const mockBoardFetch = (board: BoardData = initialData) => {
     if (url.includes("/links")) {
       return Response.json({ blocking: [], blockedBy: [] });
     }
+    if (url.includes("/stats")) {
+      return Response.json({
+        totalCards: Object.keys(board.cards).length,
+        doneCards: board.columns[board.columns.length - 1].cardIds.length,
+        overdueCards: 0,
+        completionRate: 25,
+        totalPoints: 0,
+        donePoints: 0,
+        byColumn: board.columns.map((c) => ({
+          columnKey: c.id,
+          columnTitle: c.title,
+          cardCount: c.cardIds.length,
+          totalPoints: 0,
+        })),
+        byPriority: {},
+        byAssignee: [],
+      });
+    }
     if (url.includes("/archive") && !url.includes("/cards/") && init?.method !== "POST") {
       return Response.json([]);
     }
@@ -681,6 +699,27 @@ describe("KanbanBoard", () => {
     expect(within(discoveryColumn).getByText("Align roadmap themes")).toBeInTheDocument();
     const backlogColumn = screen.getByTestId("column-col-backlog");
     expect(within(backlogColumn).queryByText("Align roadmap themes")).not.toBeInTheDocument();
+  });
+
+  it("opens board statistics drawer from header button", async () => {
+    mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getByRole("button", { name: /open board statistics/i }));
+
+    expect(await screen.findByRole("dialog", { name: /board statistics/i })).toBeVisible();
+  });
+
+  it("shows per-column card counts in stats drawer", async () => {
+    mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getByRole("button", { name: /open board statistics/i }));
+    const drawer = await screen.findByRole("dialog", { name: /board statistics/i });
+
+    expect(within(drawer).getByRole("list", { name: /cards per column/i })).toBeInTheDocument();
   });
 
   it("shows story points badge on card and SP total in column when estimate is set", async () => {
