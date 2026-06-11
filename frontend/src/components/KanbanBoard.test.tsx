@@ -498,4 +498,23 @@ describe("KanbanBoard", () => {
     expect(within(column).getByText(/over/i)).toBeInTheDocument();
     expect(within(column).getByText(/2 \/ 1/i)).toBeInTheDocument();
   });
+
+  it("shows story points badge on card and SP total in column when estimate is set", async () => {
+    const boardWithEstimates = {
+      ...initialData,
+      cards: {
+        ...initialData.cards,
+        "card-1": { ...initialData.cards["card-1"], estimate: 5 },
+        "card-2": { ...initialData.cards["card-2"], estimate: 3 },
+      },
+    };
+    mockBoardFetch(boardWithEstimates);
+    render(<KanbanBoard {...defaultProps} />);
+
+    const card1 = await screen.findByTestId("card-card-1");
+    expect(within(card1).getByText("5 SP")).toBeInTheDocument();
+
+    const column = screen.getByTestId("column-col-backlog");
+    expect(within(column).getByText("8 SP")).toBeInTheDocument();
+  });
 });

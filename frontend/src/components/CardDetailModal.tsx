@@ -57,7 +57,7 @@ type CardDetailModalProps = {
   sessionToken: string;
   boardId: number;
   username?: string;
-  onSave: (updates: Pick<Card, "title" | "details" | "priority" | "due_date" | "labels">) => void;
+  onSave: (updates: Pick<Card, "title" | "details" | "priority" | "due_date" | "labels" | "estimate">) => void;
   onClose: () => void;
 };
 
@@ -73,6 +73,7 @@ export const CardDetailModal = ({
   const [details, setDetails] = useState(card.details);
   const [priority, setPriority] = useState<Priority | null>(card.priority ?? null);
   const [dueDate, setDueDate] = useState(card.due_date ?? "");
+  const [estimate, setEstimate] = useState(card.estimate != null ? String(card.estimate) : "");
   const [labels, setLabels] = useState<string[]>(card.labels ?? []);
   const [labelInput, setLabelInput] = useState("");
   const labelInputRef = useRef<HTMLInputElement>(null);
@@ -178,7 +179,9 @@ export const CardDetailModal = ({
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     const finalLabels = labelInput.trim() ? [...labels, labelInput.trim().slice(0, 30)].filter((l, i, arr) => arr.indexOf(l) === i).slice(0, 10) : labels;
-    onSave({ title: title.trim() || card.title, details, priority, due_date: dueDate || null, labels: finalLabels });
+    const parsedEstimate = parseInt(estimate, 10);
+    const finalEstimate = estimate.trim() && !isNaN(parsedEstimate) && parsedEstimate >= 1 ? parsedEstimate : null;
+    onSave({ title: title.trim() || card.title, details, priority, due_date: dueDate || null, labels: finalLabels, estimate: finalEstimate });
     onClose();
   };
 
@@ -236,6 +239,19 @@ export const CardDetailModal = ({
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
+                className="mt-2 w-full border border-[var(--stroke)] px-3 py-2.5 text-sm font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+              />
+            </label>
+            <label className="block text-sm font-semibold text-[var(--navy-dark)]">
+              Story points
+              <input
+                type="number"
+                min="1"
+                max="999"
+                value={estimate}
+                onChange={(e) => setEstimate(e.target.value)}
+                placeholder="e.g. 3"
+                aria-label="Story points"
                 className="mt-2 w-full border border-[var(--stroke)] px-3 py-2.5 text-sm font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
               />
             </label>

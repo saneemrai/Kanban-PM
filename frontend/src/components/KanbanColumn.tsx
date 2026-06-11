@@ -42,6 +42,7 @@ export const KanbanColumn = ({
   const wipLimit = column.wip_limit ?? null;
   const wipExceeded = wipLimit !== null && totalCards > wipLimit;
   const wipAtLimit = wipLimit !== null && totalCards === wipLimit;
+  const totalPoints = cards.reduce((sum, c) => sum + (c.estimate ?? 0), 0);
 
   const countLabel = isFiltered
     ? `${cards.length} ${cards.length === 1 ? "match" : "matches"}`
@@ -91,6 +92,11 @@ export const KanbanColumn = ({
             </span>
             {wipExceeded && (
               <span className="text-xs font-bold text-red-500 uppercase tracking-wide">over</span>
+            )}
+            {totalPoints > 0 && (
+              <span className="text-xs font-semibold text-[var(--secondary-purple)]">
+                {totalPoints} SP
+              </span>
             )}
             {isEditingLimit ? (
               <form

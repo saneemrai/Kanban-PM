@@ -7,6 +7,7 @@ export type Card = {
   priority?: Priority | null;
   due_date?: string | null;
   labels?: string[];
+  estimate?: number | null;
 };
 
 export type BoardSummary = {

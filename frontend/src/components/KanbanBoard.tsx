@@ -272,7 +272,7 @@ export const KanbanBoard = ({
     }
   };
 
-  const handleSaveCard = (updates: Pick<Card, "title" | "details" | "priority" | "due_date" | "labels">) => {
+  const handleSaveCard = (updates: Pick<Card, "title" | "details" | "priority" | "due_date" | "labels" | "estimate">) => {
     if (!editingCardId) return;
     commitBoard({
       ...board,

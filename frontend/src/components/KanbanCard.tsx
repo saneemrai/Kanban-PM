@@ -113,6 +113,11 @@ export const KanbanCard = ({ card, onDelete, onEdit, onArchive, onDuplicate }: K
                 </span>
               );
             })() : null}
+            {card.estimate != null ? (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-[rgba(117,57,145,0.12)] px-2 py-0.5 text-[10px] font-bold text-[var(--secondary-purple)]">
+                {card.estimate} SP
+              </span>
+            ) : null}
           </div>
           <h4 className="font-display text-base font-semibold text-[var(--navy-dark)] leading-snug">
             {card.title}
