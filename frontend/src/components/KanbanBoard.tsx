@@ -23,6 +23,7 @@ const collisionDetection: CollisionDetection = (args) => {
   return hits.length > 0 ? hits : closestCorners(args);
 };
 import { AiChatSidebar } from "@/components/AiChatSidebar";
+import { BoardStats } from "@/components/BoardStats";
 import { CardDetailModal } from "@/components/CardDetailModal";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 import { FilterBar, defaultFilter, isFilterActive, type FilterState } from "@/components/FilterBar";
@@ -90,7 +91,7 @@ export const KanbanBoard = ({
     if (!isFilterActive(filter)) return null;
     const ids = new Set<string>();
     for (const card of Object.values(board.cards)) {
-      if (matchesFilter(card, filter.searchText, filter.priority, filter.dueDate)) {
+      if (matchesFilter(card, filter.searchText, filter.priority, filter.dueDate, filter.label)) {
         ids.add(card.id);
       }
     }
@@ -423,6 +424,7 @@ export const KanbanBoard = ({
           </div>
         </header>
 
+        <BoardStats board={board} />
         <FilterBar filter={filter} onChange={setFilter} />
 
         <DndContext

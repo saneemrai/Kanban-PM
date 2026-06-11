@@ -9,16 +9,18 @@ export type FilterState = {
   searchText: string;
   priority: PriorityFilter;
   dueDate: DueDateFilter;
+  label: string;
 };
 
 export const defaultFilter: FilterState = {
   searchText: "",
   priority: "all",
   dueDate: "all",
+  label: "",
 };
 
 export const isFilterActive = (f: FilterState) =>
-  f.searchText !== "" || f.priority !== "all" || f.dueDate !== "all";
+  f.searchText !== "" || f.priority !== "all" || f.dueDate !== "all" || f.label !== "";
 
 const PRIORITY_CHIPS: { value: PriorityFilter; label: string; active: string; inactive: string }[] = [
   { value: "low", label: "Low", active: "bg-[var(--primary-blue)] text-white", inactive: "border-[rgba(32,157,215,0.4)] text-[var(--primary-blue)]" },
@@ -101,6 +103,16 @@ export const FilterBar = ({ filter, onChange }: FilterBarProps) => {
           {chip.label}
         </button>
       ))}
+
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--gray-text)] ml-1">Label</span>
+      <input
+        type="search"
+        placeholder="Filter by label"
+        aria-label="Filter by label"
+        value={filter.label}
+        onChange={(e) => onChange({ ...filter, label: e.target.value })}
+        className="rounded-full border border-[var(--stroke)] py-1.5 px-3 text-xs font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)] w-28"
+      />
 
       {active ? (
         <button

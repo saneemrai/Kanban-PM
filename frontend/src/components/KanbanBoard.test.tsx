@@ -303,4 +303,32 @@ describe("KanbanBoard", () => {
     const backlogColumn = screen.getByTestId("column-col-backlog");
     expect(within(backlogColumn).getByText("1 match")).toBeInTheDocument();
   });
+
+  it("filters cards by label", async () => {
+    const boardWithLabels: BoardData = {
+      ...initialData,
+      cards: {
+        ...initialData.cards,
+        "card-1": { ...initialData.cards["card-1"], labels: ["backend"] },
+        "card-2": { ...initialData.cards["card-2"], labels: ["frontend"] },
+      },
+    };
+    mockBoardFetch(boardWithLabels);
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.type(screen.getByLabelText("Filter by label"), "back");
+
+    expect(screen.getByText("Align roadmap themes")).toBeInTheDocument();
+    expect(screen.queryByText("Gather customer signals")).not.toBeInTheDocument();
+  });
+
+  it("shows board statistics panel", async () => {
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    const stats = screen.getByRole("region", { name: /board statistics/i });
+    expect(stats).toBeInTheDocument();
+    expect(within(stats).getByText("8")).toBeInTheDocument();
+  });
 });

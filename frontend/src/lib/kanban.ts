@@ -195,7 +195,8 @@ export const matchesFilter = (
   card: Card,
   searchText: string,
   priority: string,
-  dueDate: string
+  dueDate: string,
+  label = ""
 ): boolean => {
   if (searchText) {
     const q = searchText.toLowerCase();
@@ -221,6 +222,13 @@ export const matchesFilter = (
       if (dueDate === "overdue" && diff >= 0) return false;
       if (dueDate === "today" && diff !== 0) return false;
       if (dueDate === "upcoming" && diff <= 0) return false;
+    }
+  }
+
+  if (label) {
+    const q = label.toLowerCase();
+    if (!(card.labels ?? []).some((l) => l.toLowerCase().includes(q))) {
+      return false;
     }
   }
 
