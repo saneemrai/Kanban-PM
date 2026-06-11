@@ -23,7 +23,7 @@ FIXED_COLUMN_IDS = [
     "col-done",
 ]
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 VALID_PRIORITIES = {"low", "medium", "high", "critical"}
@@ -212,6 +212,10 @@ def _run_migrations(connection: sqlite3.Connection) -> None:
         _migrate_to_v7(connection)
         connection.execute("UPDATE schema_version SET version = 7")
 
+    if version < 8:
+        _migrate_to_v8(connection)
+        connection.execute("UPDATE schema_version SET version = 8")
+
 
 def _migrate_to_v2(connection: sqlite3.Connection) -> None:
     connection.execute(
@@ -338,6 +342,25 @@ def _migrate_to_v4(connection: sqlite3.Connection) -> None:
     }
     if "due_date" not in card_cols:
         connection.execute("ALTER TABLE cards ADD COLUMN due_date TEXT")
+
+
+def _migrate_to_v8(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS activity (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            board_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            action TEXT NOT NULL,
+            card_id TEXT,
+            card_title TEXT,
+            meta TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (board_id) REFERENCES boards (id),
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+        """
+    )
 
 
 def _migrate_to_v7(connection: sqlite3.Connection) -> None:
@@ -623,9 +646,16 @@ def rename_board(db_path: Path, username: str, board_id: int, title: str) -> Non
         raise HTTPException(status_code=422, detail="Board title is required.")
     with connect(db_path) as connection:
         _verify_board_ownership(connection, username, board_id)
+        old_title = connection.execute(
+            "SELECT title FROM boards WHERE id = ?", (board_id,)
+        ).fetchone()["title"]
         connection.execute(
             "UPDATE boards SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (title, board_id),
+        )
+        _log_activity(
+            connection, board_id, username, "board_renamed",
+            meta={"from": old_title, "to": title}
         )
 
 
@@ -660,6 +690,15 @@ def save_board_by_id(
     board = parse_and_validate_board(payload)
     with connect(db_path) as connection:
         _verify_board_ownership(connection, username, board_id)
+        existing_ids = {
+            row["id"]
+            for row in connection.execute(
+                "SELECT id FROM cards WHERE board_id = ? AND archived = 0", (board_id,)
+            ).fetchall()
+        }
+        new_ids = set(board.cards.keys())
+        created_ids = new_ids - existing_ids
+        deleted_ids = existing_ids - new_ids
         for position, column in enumerate(board.columns):
             connection.execute(
                 """
@@ -677,6 +716,16 @@ def save_board_by_id(
             "UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (board_id,),
         )
+        for card_id in created_ids:
+            card = board.cards[card_id]
+            _log_activity(
+                connection, board_id, username, "card_created",
+                card_id=card_id, card_title=card.title
+            )
+        for card_id in deleted_ids:
+            _log_activity(
+                connection, board_id, username, "card_deleted", card_id=card_id
+            )
     return _load_board_data(db_path, board_id)
 
 
@@ -928,6 +977,57 @@ def add_card_comment(
     )
 
 
+def _log_activity(
+    connection: sqlite3.Connection,
+    board_id: int,
+    username: str,
+    action: str,
+    card_id: str | None = None,
+    card_title: str | None = None,
+    meta: dict | None = None,
+) -> None:
+    row = connection.execute(
+        "SELECT id FROM users WHERE username = ?", (username,)
+    ).fetchone()
+    if row is None:
+        return
+    connection.execute(
+        "INSERT INTO activity (board_id, user_id, action, card_id, card_title, meta) VALUES (?, ?, ?, ?, ?, ?)",
+        (board_id, row["id"], action, card_id, card_title, json.dumps(meta or {})),
+    )
+
+
+def list_activity(
+    db_path: Path, username: str, board_id: int, limit: int = 50
+) -> list[dict]:
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        rows = connection.execute(
+            """
+            SELECT a.id, u.username AS actor, a.action, a.card_id, a.card_title,
+                   a.meta, a.created_at
+            FROM activity a
+            JOIN users u ON u.id = a.user_id
+            WHERE a.board_id = ?
+            ORDER BY a.created_at DESC
+            LIMIT ?
+            """,
+            (board_id, limit),
+        ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "actor": row["actor"],
+            "action": row["action"],
+            "cardId": row["card_id"],
+            "cardTitle": row["card_title"],
+            "meta": json.loads(row["meta"] or "{}"),
+            "createdAt": row["created_at"],
+        }
+        for row in rows
+    ]
+
+
 def list_archived_cards(db_path: Path, username: str, board_id: int) -> list[dict]:
     with connect(db_path) as connection:
         _verify_board_ownership(connection, username, board_id)
@@ -968,6 +1068,9 @@ def archive_card(db_path: Path, username: str, board_id: int, card_id: str) -> B
             "SELECT COALESCE(MIN(position), 0) - 1 AS min_pos FROM cards WHERE board_id = ? AND archived = 1",
             (board_id,),
         ).fetchone()["min_pos"]
+        card_title = connection.execute(
+            "SELECT title FROM cards WHERE board_id = ? AND id = ?", (board_id, card_id)
+        ).fetchone()["title"]
         connection.execute(
             "UPDATE cards SET archived = 1, position = ? WHERE board_id = ? AND id = ?",
             (min_pos, board_id, card_id),
@@ -975,6 +1078,10 @@ def archive_card(db_path: Path, username: str, board_id: int, card_id: str) -> B
         connection.execute(
             "UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (board_id,),
+        )
+        _log_activity(
+            connection, board_id, username, "card_archived",
+            card_id=card_id, card_title=card_title
         )
     return _load_board_data(db_path, board_id)
 
@@ -994,6 +1101,9 @@ def restore_card(db_path: Path, username: str, board_id: int, card_id: str) -> B
             "SELECT COALESCE(MAX(position), -1) AS max_pos FROM cards WHERE board_id = ? AND column_key = ? AND archived = 0",
             (board_id, "col-backlog"),
         ).fetchone()["max_pos"]
+        card_title = connection.execute(
+            "SELECT title FROM cards WHERE board_id = ? AND id = ?", (board_id, card_id)
+        ).fetchone()["title"]
         connection.execute(
             "UPDATE cards SET archived = 0, column_key = 'col-backlog', position = ? WHERE board_id = ? AND id = ?",
             (max_pos + 1, board_id, card_id),
@@ -1001,6 +1111,10 @@ def restore_card(db_path: Path, username: str, board_id: int, card_id: str) -> B
         connection.execute(
             "UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (board_id,),
+        )
+        _log_activity(
+            connection, board_id, username, "card_restored",
+            card_id=card_id, card_title=card_title
         )
     return _load_board_data(db_path, board_id)
 

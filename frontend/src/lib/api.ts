@@ -179,6 +179,26 @@ export const saveBoard = async (
   return parseResponse(response);
 };
 
+export type ActivityEvent = {
+  id: number;
+  actor: string;
+  action: string;
+  cardId: string | null;
+  cardTitle: string | null;
+  meta: Record<string, string>;
+  createdAt: string;
+};
+
+export const listActivity = async (
+  sessionToken: string,
+  boardId: number
+): Promise<ActivityEvent[]> => {
+  const response = await fetch(`/api/boards/${boardId}/activity`, {
+    headers: sessionHeaders(sessionToken),
+  });
+  return parseResponse(response);
+};
+
 export type ArchivedCard = {
   id: string;
   title: string;

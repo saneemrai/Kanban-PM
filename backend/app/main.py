@@ -25,6 +25,7 @@ from app.board_store import (
     get_board_by_id,
     get_username_for_session,
     initialize_database,
+    list_activity,
     list_archived_cards,
     list_boards,
     list_card_comments,
@@ -170,6 +171,14 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
             "boardChanged": True,
             "board": saved_board.model_dump(),
         }
+
+    @app.get("/api/boards/{board_id}/activity")
+    def read_board_activity(
+        board_id: int,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        return list_activity(app.state.db_path, username, board_id)
 
     @app.get("/api/boards/{board_id}/archive")
     def read_archived_cards(

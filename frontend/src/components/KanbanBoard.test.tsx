@@ -34,6 +34,9 @@ const mockBoardFetch = (board: BoardData = initialData) => {
     if (url.includes("/comments")) {
       return Response.json([]);
     }
+    if (url.includes("/activity")) {
+      return Response.json([]);
+    }
     if (url.includes("/archive") && !url.includes("/cards/") && init?.method !== "POST") {
       return Response.json([]);
     }
@@ -386,6 +389,17 @@ describe("KanbanBoard", () => {
     await userEvent.click(screen.getByRole("button", { name: /archive Align roadmap themes/i }));
 
     expect(screen.queryByText("Align roadmap themes")).not.toBeInTheDocument();
+  });
+
+  it("opens activity drawer from header button", async () => {
+    mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getByRole("button", { name: /open activity/i }));
+
+    expect(await screen.findByRole("dialog", { name: /board activity/i })).toBeVisible();
+    expect(screen.getByText("No activity yet")).toBeInTheDocument();
   });
 
   it("opens archive drawer from header button", async () => {

@@ -1146,6 +1146,90 @@ def test_archive_nonexistent_card_returns_404(tmp_path: Path) -> None:
     assert response.status_code == 404
 
 
+# --- Activity log tests ---
+
+def test_activity_log_empty_initially(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    response = client.get(f"/api/boards/{board_id}/activity", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_activity_logs_card_creation(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    new_id = "card-new-test"
+    board["cards"][new_id] = {"id": new_id, "title": "New test card", "details": "d", "labels": []}
+    board["columns"][0]["cardIds"].append(new_id)
+    client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    activity = client.get(f"/api/boards/{board_id}/activity", headers=headers).json()
+    assert any(a["action"] == "card_created" and a["cardId"] == new_id for a in activity)
+
+
+def test_activity_logs_card_deletion(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    card_id = board["columns"][0]["cardIds"][0]
+    board["cards"].pop(card_id)
+    board["columns"][0]["cardIds"].remove(card_id)
+    client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    activity = client.get(f"/api/boards/{board_id}/activity", headers=headers).json()
+    assert any(a["action"] == "card_deleted" and a["cardId"] == card_id for a in activity)
+
+
+def test_activity_logs_card_archive(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+    client.post(f"/api/boards/{board_id}/cards/{card_id}/archive", headers=headers)
+
+    activity = client.get(f"/api/boards/{board_id}/activity", headers=headers).json()
+    assert any(a["action"] == "card_archived" and a["cardId"] == card_id for a in activity)
+
+
+def test_activity_logs_card_restore(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+    client.post(f"/api/boards/{board_id}/cards/{card_id}/archive", headers=headers)
+    client.post(f"/api/boards/{board_id}/cards/{card_id}/restore", headers=headers)
+
+    activity = client.get(f"/api/boards/{board_id}/activity", headers=headers).json()
+    assert any(a["action"] == "card_restored" and a["cardId"] == card_id for a in activity)
+
+
+def test_activity_logs_board_rename(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    client.patch(f"/api/boards/{board_id}", json={"title": "Renamed Board"}, headers=headers)
+
+    activity = client.get(f"/api/boards/{board_id}/activity", headers=headers).json()
+    rename_events = [a for a in activity if a["action"] == "board_renamed"]
+    assert len(rename_events) == 1
+    assert rename_events[0]["meta"]["to"] == "Renamed Board"
+
+
+def test_activity_requires_session(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    assert client.get(f"/api/boards/{board_id}/activity").status_code == 401
+
+
 def test_archive_requires_session(tmp_path: Path) -> None:
     client = make_client(tmp_path)
     headers = login(client)

@@ -22,6 +22,7 @@ const collisionDetection: CollisionDetection = (args) => {
   const hits = pointerWithin(args);
   return hits.length > 0 ? hits : closestCorners(args);
 };
+import { ActivityDrawer } from "@/components/ActivityDrawer";
 import { AiChatSidebar } from "@/components/AiChatSidebar";
 import { ArchiveDrawer } from "@/components/ArchiveDrawer";
 import { BoardStats } from "@/components/BoardStats";
@@ -78,6 +79,7 @@ export const KanbanBoard = ({
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [filter, setFilter] = useState<FilterState>(defaultFilter);
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
+  const [isActivityOpen, setIsActivityOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState(boardTitle);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const titleBeforeEdit = useRef(boardTitle);
@@ -416,6 +418,18 @@ export const KanbanBoard = ({
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
               type="button"
+              onClick={() => setIsActivityOpen(true)}
+              aria-label="Open activity"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--stroke)] px-3 py-2 text-xs font-medium text-[var(--gray-text)] transition hover:bg-[var(--surface)]"
+            >
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.3"/>
+                <path d="M7 4v3l2 2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              </svg>
+              Activity
+            </button>
+            <button
+              type="button"
               onClick={() => setIsArchiveOpen(true)}
               aria-label="Open archive"
               className="inline-flex items-center gap-1.5 rounded-full border border-[var(--stroke)] px-3 py-2 text-xs font-medium text-[var(--gray-text)] transition hover:bg-[var(--surface)]"
@@ -519,6 +533,14 @@ export const KanbanBoard = ({
           <ChangePasswordModal
             sessionToken={sessionToken}
             onClose={() => setIsChangingPassword(false)}
+          />
+        ) : null}
+
+        {isActivityOpen ? (
+          <ActivityDrawer
+            sessionToken={sessionToken}
+            boardId={boardId}
+            onClose={() => setIsActivityOpen(false)}
           />
         ) : null}
 
