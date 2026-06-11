@@ -98,7 +98,7 @@ export const KanbanBoard = ({
     if (!isFilterActive(filter)) return null;
     const ids = new Set<string>();
     for (const card of Object.values(board.cards)) {
-      if (matchesFilter(card, filter.searchText, filter.priority, filter.dueDate, filter.label)) {
+      if (matchesFilter(card, filter.searchText, filter.priority, filter.dueDate, filter.label, filter.assignee)) {
         ids.add(card.id);
       }
     }
@@ -272,7 +272,7 @@ export const KanbanBoard = ({
     }
   };
 
-  const handleSaveCard = (updates: Pick<Card, "title" | "details" | "priority" | "due_date" | "labels" | "estimate">) => {
+  const handleSaveCard = (updates: Pick<Card, "title" | "details" | "priority" | "due_date" | "labels" | "estimate" | "assignee">) => {
     if (!editingCardId) return;
     commitBoard({
       ...board,

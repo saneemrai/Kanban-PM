@@ -125,6 +125,17 @@ export const KanbanCard = ({ card, onDelete, onEdit, onArchive, onDuplicate }: K
           <p className="mt-1.5 text-sm leading-5 text-[var(--gray-text)]">
             {card.details}
           </p>
+          {card.assignee ? (
+            <div className="mt-2 flex items-center gap-1.5">
+              <span
+                className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--secondary-purple)] text-[9px] font-bold uppercase text-white"
+                aria-hidden="true"
+              >
+                {card.assignee[0]}
+              </span>
+              <span className="text-xs font-medium text-[var(--gray-text)]">{card.assignee}</span>
+            </div>
+          ) : null}
         </div>
         <div className="mt-0.5 flex shrink-0 flex-col gap-1">
           {onDuplicate ? (

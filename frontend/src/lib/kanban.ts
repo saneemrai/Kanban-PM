@@ -8,6 +8,7 @@ export type Card = {
   due_date?: string | null;
   labels?: string[];
   estimate?: number | null;
+  assignee?: string | null;
 };
 
 export type BoardSummary = {
@@ -198,7 +199,8 @@ export const matchesFilter = (
   searchText: string,
   priority: string,
   dueDate: string,
-  label = ""
+  label = "",
+  assignee = ""
 ): boolean => {
   if (searchText) {
     const q = searchText.toLowerCase();
@@ -230,6 +232,13 @@ export const matchesFilter = (
   if (label) {
     const q = label.toLowerCase();
     if (!(card.labels ?? []).some((l) => l.toLowerCase().includes(q))) {
+      return false;
+    }
+  }
+
+  if (assignee) {
+    const q = assignee.toLowerCase();
+    if (!(card.assignee ?? "").toLowerCase().includes(q)) {
       return false;
     }
   }

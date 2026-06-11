@@ -1538,3 +1538,70 @@ def test_estimate_persists_across_reload(tmp_path: Path) -> None:
 
     reloaded = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
     assert reloaded["cards"]["card-3"]["estimate"] == 8
+
+
+# --- Assignee tests ---
+
+def test_assignee_defaults_to_null(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    for card in board["cards"].values():
+        assert card["assignee"] is None
+
+
+def test_assignee_saves_and_loads(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["cards"]["card-1"]["assignee"] = "Alice"
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["cards"]["card-1"]["assignee"] == "Alice"
+    assert response.json()["cards"]["card-2"]["assignee"] is None
+
+
+def test_assignee_can_be_cleared(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["cards"]["card-1"]["assignee"] = "Bob"
+    client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    board["cards"]["card-1"]["assignee"] = None
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["cards"]["card-1"]["assignee"] is None
+
+
+def test_assignee_rejects_empty_string(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["cards"]["card-1"]["assignee"] = "   "
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    assert response.status_code == 422
+
+
+def test_assignee_rejects_over_100_chars(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["cards"]["card-1"]["assignee"] = "x" * 101
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    assert response.status_code == 422

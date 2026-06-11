@@ -499,6 +499,22 @@ describe("KanbanBoard", () => {
     expect(within(column).getByText(/2 \/ 1/i)).toBeInTheDocument();
   });
 
+  it("shows assignee chip on card when assigned", async () => {
+    const boardWithAssignee = {
+      ...initialData,
+      cards: {
+        ...initialData.cards,
+        "card-1": { ...initialData.cards["card-1"], assignee: "Alice" },
+      },
+    };
+    mockBoardFetch(boardWithAssignee);
+    render(<KanbanBoard {...defaultProps} />);
+
+    const card = await screen.findByTestId("card-card-1");
+    expect(within(card).getByText("Alice")).toBeInTheDocument();
+    expect(within(card).getByText("A")).toBeInTheDocument();
+  });
+
   it("shows story points badge on card and SP total in column when estimate is set", async () => {
     const boardWithEstimates = {
       ...initialData,
