@@ -80,6 +80,7 @@ export const KanbanBoard = ({
   const [filter, setFilter] = useState<FilterState>(defaultFilter);
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [isActivityOpen, setIsActivityOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [titleDraft, setTitleDraft] = useState(boardTitle);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const titleBeforeEdit = useRef(boardTitle);
@@ -135,6 +136,20 @@ export const KanbanBoard = ({
       isCurrent = false;
     };
   }, [sessionToken, boardId, onSessionExpired]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const inInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+      if (e.key === "/" && !inInput && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
 
   const commitBoard = (nextBoard: BoardData) => {
     setBoard(nextBoard);
@@ -272,7 +287,7 @@ export const KanbanBoard = ({
     }
   };
 
-  const handleSaveCard = (updates: Pick<Card, "title" | "details" | "priority" | "due_date" | "labels" | "estimate" | "assignee">) => {
+  const handleSaveCard = (updates: Pick<Card, "title" | "details" | "priority" | "due_date" | "labels" | "estimate" | "assignee" | "color">) => {
     if (!editingCardId) return;
     commitBoard({
       ...board,
@@ -552,7 +567,7 @@ export const KanbanBoard = ({
         </header>
 
         <BoardStats board={board} />
-        <FilterBar filter={filter} onChange={setFilter} />
+        <FilterBar filter={filter} onChange={setFilter} searchInputRef={searchInputRef} />
 
         <DndContext
           sensors={sensors}

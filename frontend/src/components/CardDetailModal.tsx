@@ -57,7 +57,7 @@ type CardDetailModalProps = {
   sessionToken: string;
   boardId: number;
   username?: string;
-  onSave: (updates: Pick<Card, "title" | "details" | "priority" | "due_date" | "labels" | "estimate" | "assignee">) => void;
+  onSave: (updates: Pick<Card, "title" | "details" | "priority" | "due_date" | "labels" | "estimate" | "assignee" | "color">) => void;
   onClose: () => void;
 };
 
@@ -75,6 +75,7 @@ export const CardDetailModal = ({
   const [dueDate, setDueDate] = useState(card.due_date ?? "");
   const [estimate, setEstimate] = useState(card.estimate != null ? String(card.estimate) : "");
   const [assignee, setAssignee] = useState(card.assignee ?? "");
+  const [color, setColor] = useState<string | null>(card.color ?? null);
   const [labels, setLabels] = useState<string[]>(card.labels ?? []);
   const [labelInput, setLabelInput] = useState("");
   const labelInputRef = useRef<HTMLInputElement>(null);
@@ -182,7 +183,7 @@ export const CardDetailModal = ({
     const finalLabels = labelInput.trim() ? [...labels, labelInput.trim().slice(0, 30)].filter((l, i, arr) => arr.indexOf(l) === i).slice(0, 10) : labels;
     const parsedEstimate = parseInt(estimate, 10);
     const finalEstimate = estimate.trim() && !isNaN(parsedEstimate) && parsedEstimate >= 1 ? parsedEstimate : null;
-    onSave({ title: title.trim() || card.title, details, priority, due_date: dueDate || null, labels: finalLabels, estimate: finalEstimate, assignee: assignee.trim() || null });
+    onSave({ title: title.trim() || card.title, details, priority, due_date: dueDate || null, labels: finalLabels, estimate: finalEstimate, assignee: assignee.trim() || null, color: color || null });
     onClose();
   };
 
@@ -268,6 +269,35 @@ export const CardDetailModal = ({
                 className="mt-2 w-full border border-[var(--stroke)] px-3 py-2.5 text-sm font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
               />
             </label>
+            <div>
+              <p className="text-sm font-semibold text-[var(--navy-dark)]">Card color</p>
+              <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Card color">
+                <button
+                  type="button"
+                  onClick={() => setColor(null)}
+                  aria-pressed={color === null}
+                  aria-label="No color"
+                  className={`h-7 w-7 rounded-full border-2 transition ${color === null ? "border-[var(--navy-dark)] ring-2 ring-offset-1 ring-[var(--navy-dark)]" : "border-[var(--stroke)]"} bg-white`}
+                />
+                {(["red","orange","yellow","green","blue","purple","pink","gray"] as const).map((c) => {
+                  const bgMap: Record<string, string> = {
+                    red: "bg-red-400", orange: "bg-orange-400", yellow: "bg-yellow-400",
+                    green: "bg-green-400", blue: "bg-blue-400", purple: "bg-purple-400",
+                    pink: "bg-pink-400", gray: "bg-gray-400",
+                  };
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setColor(c)}
+                      aria-pressed={color === c}
+                      aria-label={`${c} color`}
+                      className={`h-7 w-7 rounded-full border-2 transition ${color === c ? "ring-2 ring-offset-1 ring-[var(--navy-dark)] border-transparent" : "border-transparent"} ${bgMap[c]}`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
             <div>
               <p className="text-sm font-semibold text-[var(--navy-dark)]">Labels</p>
               <div

@@ -23,10 +23,11 @@ FIXED_COLUMN_IDS = [
     "col-done",
 ]
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 
 VALID_PRIORITIES = {"low", "medium", "high", "critical"}
+VALID_COLORS = {"red", "orange", "yellow", "green", "blue", "purple", "pink", "gray"}
 
 
 class Card(BaseModel):
@@ -40,6 +41,7 @@ class Card(BaseModel):
     labels: list[str] = []
     estimate: int | None = None
     assignee: str | None = None
+    color: str | None = None
 
 
 class Column(BaseModel):
@@ -269,6 +271,10 @@ def _run_migrations(connection: sqlite3.Connection) -> None:
         _migrate_to_v12(connection)
         connection.execute("UPDATE schema_version SET version = 12")
 
+    if version < 13:
+        _migrate_to_v13(connection)
+        connection.execute("UPDATE schema_version SET version = 13")
+
 
 def _migrate_to_v2(connection: sqlite3.Connection) -> None:
     connection.execute(
@@ -395,6 +401,15 @@ def _migrate_to_v4(connection: sqlite3.Connection) -> None:
     }
     if "due_date" not in card_cols:
         connection.execute("ALTER TABLE cards ADD COLUMN due_date TEXT")
+
+
+def _migrate_to_v13(connection: sqlite3.Connection) -> None:
+    card_cols = {
+        r["name"]
+        for r in connection.execute("PRAGMA table_info(cards)").fetchall()
+    }
+    if "color" not in card_cols:
+        connection.execute("ALTER TABLE cards ADD COLUMN color TEXT")
 
 
 def _migrate_to_v12(connection: sqlite3.Connection) -> None:
@@ -862,7 +877,7 @@ def _load_board_data(db_path: Path, board_id: int) -> BoardData:
         ).fetchall()
         cards = connection.execute(
             """
-            SELECT id, column_key, title, details, priority, due_date, labels, estimate, assignee
+            SELECT id, column_key, title, details, priority, due_date, labels, estimate, assignee, color
             FROM cards
             WHERE board_id = ? AND archived = 0
             ORDER BY column_key, position
@@ -883,6 +898,7 @@ def _load_board_data(db_path: Path, board_id: int) -> BoardData:
             labels=json.loads(card["labels"] or "[]"),
             estimate=card["estimate"],
             assignee=card["assignee"],
+            color=card["color"],
         )
 
     return BoardData(
@@ -945,10 +961,10 @@ def insert_board_cards(
             card = board.cards[card_id]
             connection.execute(
                 """
-                INSERT INTO cards (id, board_id, column_key, title, details, position, priority, due_date, labels, estimate, assignee)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO cards (id, board_id, column_key, title, details, position, priority, due_date, labels, estimate, assignee, color)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (card.id, board_id, column.id, card.title, card.details, position, card.priority, card.due_date, json.dumps(card.labels), card.estimate, card.assignee),
+                (card.id, board_id, column.id, card.title, card.details, position, card.priority, card.due_date, json.dumps(card.labels), card.estimate, card.assignee, card.color),
             )
 
 
@@ -1000,6 +1016,11 @@ def parse_and_validate_board(payload: dict[str, Any]) -> BoardData:
             )
         if not card.title.strip():
             raise HTTPException(status_code=422, detail="Card title is required.")
+        if card.color is not None and card.color not in VALID_COLORS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid color '{card.color}'. Must be one of: {', '.join(sorted(VALID_COLORS))}.",
+            )
         if card.assignee is not None and (not card.assignee.strip() or len(card.assignee) > 100):
             raise HTTPException(
                 status_code=422, detail="Assignee must be 1-100 characters."

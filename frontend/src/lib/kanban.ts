@@ -9,6 +9,7 @@ export type Card = {
   labels?: string[];
   estimate?: number | null;
   assignee?: string | null;
+  color?: string | null;
 };
 
 export type BoardSummary = {

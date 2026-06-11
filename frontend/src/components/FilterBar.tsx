@@ -1,5 +1,6 @@
 "use client";
 
+import type { RefObject } from "react";
 import type { Priority, SortMode } from "@/lib/kanban";
 
 export type PriorityFilter = Priority | "all";
@@ -43,9 +44,10 @@ const DUE_DATE_CHIPS: { value: DueDateFilter; label: string; active: string; ina
 type FilterBarProps = {
   filter: FilterState;
   onChange: (next: FilterState) => void;
+  searchInputRef?: RefObject<HTMLInputElement | null>;
 };
 
-export const FilterBar = ({ filter, onChange }: FilterBarProps) => {
+export const FilterBar = ({ filter, onChange, searchInputRef }: FilterBarProps) => {
   const active = isFilterActive(filter);
 
   return (
@@ -63,6 +65,7 @@ export const FilterBar = ({ filter, onChange }: FilterBarProps) => {
           <path d="M9.5 9.5L13 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
         </svg>
         <input
+          ref={searchInputRef}
           type="search"
           placeholder="Search cards"
           aria-label="Search cards"

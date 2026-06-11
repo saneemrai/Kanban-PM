@@ -3,6 +3,17 @@ import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
 import type { Card, Priority } from "@/lib/kanban";
 
+const CARD_COLORS: Record<string, string> = {
+  red: "border-l-4 border-l-red-400",
+  orange: "border-l-4 border-l-orange-400",
+  yellow: "border-l-4 border-l-yellow-400",
+  green: "border-l-4 border-l-green-400",
+  blue: "border-l-4 border-l-blue-400",
+  purple: "border-l-4 border-l-purple-400",
+  pink: "border-l-4 border-l-pink-400",
+  gray: "border-l-4 border-l-gray-400",
+};
+
 const LABEL_COLORS = [
   "bg-[rgba(32,157,215,0.15)] text-[var(--primary-blue)]",
   "bg-[rgba(117,57,145,0.15)] text-[var(--secondary-purple)]",
@@ -71,6 +82,7 @@ export const KanbanCard = ({ card, onDelete, onEdit, onArchive, onDuplicate }: K
       className={clsx(
         "group rounded-2xl border border-transparent bg-white px-4 py-3.5 shadow-[0_12px_24px_rgba(3,33,71,0.08)]",
         "transition-all duration-150",
+        card.color && CARD_COLORS[card.color],
         isDragging && "opacity-60 shadow-[0_18px_32px_rgba(3,33,71,0.16)]"
       )}
       {...attributes}

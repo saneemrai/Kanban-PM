@@ -1607,6 +1607,45 @@ def test_assignee_rejects_over_100_chars(tmp_path: Path) -> None:
     assert response.status_code == 422
 
 
+# --- Card color tests ---
+
+def test_color_defaults_to_null(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    for card in board["cards"].values():
+        assert card["color"] is None
+
+
+def test_color_saves_and_loads(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["cards"]["card-1"]["color"] = "red"
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["cards"]["card-1"]["color"] == "red"
+    assert response.json()["cards"]["card-2"]["color"] is None
+
+
+def test_color_rejects_invalid_value(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["cards"]["card-1"]["color"] = "neon-chartreuse"
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    assert response.status_code == 422
+
+
 # --- Board template tests ---
 
 def test_default_template_creates_board_with_standard_columns(tmp_path: Path) -> None:
