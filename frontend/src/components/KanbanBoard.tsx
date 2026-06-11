@@ -331,6 +331,36 @@ export const KanbanBoard = ({
     }
   };
 
+  const handleExport = () => {
+    const exportData = {
+      title: titleDraft,
+      exportedAt: new Date().toISOString(),
+      columns: board.columns.map((col) => ({
+        title: col.title,
+        wipLimit: col.wip_limit ?? null,
+        cards: col.cardIds
+          .map((id) => board.cards[id])
+          .filter(Boolean)
+          .map((c) => ({
+            title: c.title,
+            details: c.details,
+            priority: c.priority ?? null,
+            dueDate: c.due_date ?? null,
+            assignee: c.assignee ?? null,
+            estimate: c.estimate ?? null,
+            labels: c.labels ?? [],
+          })),
+      })),
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${titleDraft.replace(/[^a-z0-9]/gi, "-").toLowerCase()}-board.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleAiBoardUpdate = (nextBoard: BoardData) => {
     setBoard(nextBoard);
     setSaveError("");
@@ -450,6 +480,17 @@ export const KanbanBoard = ({
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              type="button"
+              onClick={handleExport}
+              aria-label="Export board"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--stroke)] px-3 py-2 text-xs font-medium text-[var(--gray-text)] transition hover:bg-[var(--surface)]"
+            >
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path d="M7 2v7M4 6l3 3 3-3M2 11h10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Export
+            </button>
             <button
               type="button"
               onClick={() => setIsActivityOpen(true)}

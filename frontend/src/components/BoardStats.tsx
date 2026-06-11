@@ -13,9 +13,14 @@ export const BoardStats = ({ board }: BoardStatsProps) => {
   const cards = Object.values(board.cards);
   const total = cards.length;
 
+  const doneCol = board.columns.find((c) => c.id === "col-done");
+  const doneCardIds = new Set(doneCol?.cardIds ?? []);
+  const doneCount = doneCardIds.size;
+  const donePct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
+
   let overdueCount = 0;
-  let withPriorityCount = 0;
-  let withLabelsCount = 0;
+  let totalSP = 0;
+  let doneSP = 0;
 
   for (const card of cards) {
     if (card.due_date) {
@@ -23,8 +28,10 @@ export const BoardStats = ({ board }: BoardStatsProps) => {
       const due = new Date(y, m - 1, d);
       if (due < today) overdueCount++;
     }
-    if (card.priority) withPriorityCount++;
-    if (card.labels && card.labels.length > 0) withLabelsCount++;
+    if (card.estimate) {
+      totalSP += card.estimate;
+      if (doneCardIds.has(card.id)) doneSP += card.estimate;
+    }
   }
 
   const columnStats = board.columns.map((col) => ({
@@ -75,14 +82,12 @@ export const BoardStats = ({ board }: BoardStatsProps) => {
 
         <div className="flex gap-4">
           <Stat label="Total" value={total} />
+          <Stat label="Done" value={donePct} suffix="%" accent={donePct === 100 ? "text-green-600" : undefined} />
           {overdueCount > 0 ? (
             <Stat label="Overdue" value={overdueCount} accent="text-red-600" />
           ) : null}
-          {withPriorityCount > 0 ? (
-            <Stat label="Prioritized" value={withPriorityCount} />
-          ) : null}
-          {withLabelsCount > 0 ? (
-            <Stat label="Labelled" value={withLabelsCount} />
+          {totalSP > 0 ? (
+            <Stat label="Done SP" value={doneSP} suffix={`/${totalSP}`} />
           ) : null}
         </div>
       </div>
@@ -93,14 +98,18 @@ export const BoardStats = ({ board }: BoardStatsProps) => {
 const Stat = ({
   label,
   value,
+  suffix = "",
   accent = "text-[var(--navy-dark)]",
 }: {
   label: string;
   value: number;
+  suffix?: string;
   accent?: string;
 }) => (
   <div className="text-center">
-    <p className={`text-xl font-bold tabular-nums ${accent}`}>{value}</p>
+    <p className={`text-xl font-bold tabular-nums ${accent}`}>
+      {value}<span className="text-sm font-semibold text-[var(--gray-text)]">{suffix}</span>
+    </p>
     <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--gray-text)]">
       {label}
     </p>

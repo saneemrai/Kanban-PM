@@ -515,6 +515,34 @@ describe("KanbanBoard", () => {
     expect(within(card).getByText("A")).toBeInTheDocument();
   });
 
+  it("shows export button in header", async () => {
+    mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    expect(screen.getByRole("button", { name: /export board/i })).toBeInTheDocument();
+  });
+
+  it("shows done percentage and done SP in board stats", async () => {
+    const boardWithEstimates = {
+      ...initialData,
+      cards: {
+        ...initialData.cards,
+        "card-7": { ...initialData.cards["card-7"], estimate: 5 },
+        "card-8": { ...initialData.cards["card-8"], estimate: 3 },
+        "card-1": { ...initialData.cards["card-1"], estimate: 2 },
+      },
+    };
+    mockBoardFetch(boardWithEstimates);
+    render(<KanbanBoard {...defaultProps} />);
+
+    await screen.findAllByTestId(/column-/i);
+
+    const stats = screen.getByRole("region", { name: /board statistics/i });
+    expect(within(stats).getByText(/^25$/)).toBeInTheDocument();
+    expect(within(stats).getByText(/done sp/i)).toBeInTheDocument();
+  });
+
   it("shows story points badge on card and SP total in column when estimate is set", async () => {
     const boardWithEstimates = {
       ...initialData,
