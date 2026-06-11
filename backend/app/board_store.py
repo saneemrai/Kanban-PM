@@ -1555,3 +1555,51 @@ def delete_card_link(
             (board_id, from_card_id, to_card_id),
         )
     return list_card_links(db_path, username, board_id, from_card_id)
+
+
+def search_boards_and_cards(db_path: Path, username: str, query: str) -> list[dict]:
+    query = query.strip()
+    if len(query) < 2:
+        return []
+
+    like = f"%{query}%"
+    with connect(db_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT 'board' AS type, b.id AS board_id, b.title AS board_title,
+                   NULL AS card_id, NULL AS card_title, NULL AS card_details,
+                   NULL AS column_title
+            FROM boards b
+            JOIN users u ON b.user_id = u.id
+            WHERE u.username = ? AND (b.title LIKE ? OR b.description LIKE ?)
+
+            UNION ALL
+
+            SELECT 'card', b.id, b.title,
+                   c.id, c.title, c.details,
+                   col.title
+            FROM cards c
+            JOIN boards b ON c.board_id = b.id
+            JOIN users u ON b.user_id = u.id
+            JOIN columns col ON col.board_id = b.id AND col.key = c.column_key
+            WHERE u.username = ? AND c.archived = 0
+              AND (c.title LIKE ? OR c.details LIKE ? OR c.assignee LIKE ?)
+
+            ORDER BY board_title, type DESC, card_title
+            LIMIT 30
+            """,
+            (username, like, like, username, like, like, like),
+        ).fetchall()
+
+    return [
+        {
+            "type": row["type"],
+            "boardId": row["board_id"],
+            "boardTitle": row["board_title"],
+            "cardId": row["card_id"],
+            "cardTitle": row["card_title"],
+            "cardDetails": row["card_details"],
+            "columnTitle": row["column_title"],
+        }
+        for row in rows
+    ]

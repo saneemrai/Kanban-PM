@@ -1,9 +1,9 @@
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AuthenticatedApp } from "@/components/AuthenticatedApp";
 import { initialData } from "@/lib/kanban";
 
-const MOCK_BOARDS = [{ id: 1, title: "My Board", cardCount: 8, updatedAt: "2024-01-01" }];
+const MOCK_BOARDS = [{ id: 1, title: "My Board", description: "", cardCount: 8, updatedAt: "2024-01-01" }];
 
 const mockFetch = (options: { loginFails?: boolean; boardsFails?: boolean } = {}) => {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -142,6 +142,92 @@ describe("AuthenticatedApp", () => {
 
     await screen.findByRole("heading", { name: "My Boards" });
     await user.click(screen.getAllByRole("button", { name: /open board/i })[0]);
+
+    expect(await screen.findAllByTestId(/column-/i)).toHaveLength(5);
+  });
+
+  it("shows search bar on board selector page", async () => {
+    const multiBoards = [
+      { id: 1, title: "Board One", description: "", cardCount: 8, updatedAt: "2024-01-01" },
+      { id: 2, title: "Board Two", description: "", cardCount: 3, updatedAt: "2024-01-02" },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/login") return Response.json({ username: "user", sessionToken: "session-1" });
+        if (url === "/api/boards") return Response.json(multiBoards);
+        if (url.includes("/search")) return Response.json([]);
+        if (url.includes("/data")) return Response.json(initialData);
+        return Response.json(initialData);
+      })
+    );
+
+    render(<AuthenticatedApp />);
+    await signIn();
+
+    expect(await screen.findByLabelText("Search boards and cards")).toBeInTheDocument();
+  });
+
+  it("shows search results when typing in search bar", async () => {
+    const multiBoards = [
+      { id: 1, title: "Board One", description: "", cardCount: 8, updatedAt: "2024-01-01" },
+      { id: 2, title: "Board Two", description: "", cardCount: 3, updatedAt: "2024-01-02" },
+    ];
+    const searchResults = [
+      { type: "card", boardId: 1, boardTitle: "Board One", cardId: "c1", cardTitle: "Fix the bug", cardDetails: "Details here", columnTitle: "Backlog" },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/login") return Response.json({ username: "user", sessionToken: "session-1" });
+        if (url === "/api/boards") return Response.json(multiBoards);
+        if (url.includes("/search")) return Response.json(searchResults);
+        if (url.includes("/data")) return Response.json(initialData);
+        return Response.json(initialData);
+      })
+    );
+
+    render(<AuthenticatedApp />);
+    await signIn();
+
+    await screen.findByLabelText("Search boards and cards");
+    await userEvent.type(screen.getByLabelText("Search boards and cards"), "Fix");
+
+    expect(await screen.findByText("Fix the bug")).toBeInTheDocument();
+    expect(screen.getByText("Board One · Backlog")).toBeInTheDocument();
+  });
+
+  it("navigates to board when clicking a search result", async () => {
+    const multiBoards = [
+      { id: 1, title: "Board One", description: "", cardCount: 8, updatedAt: "2024-01-01" },
+      { id: 2, title: "Board Two", description: "", cardCount: 3, updatedAt: "2024-01-02" },
+    ];
+    const searchResults = [
+      { type: "board", boardId: 2, boardTitle: "Board Two", cardId: null, cardTitle: null, cardDetails: null, columnTitle: null },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/login") return Response.json({ username: "user", sessionToken: "session-1" });
+        if (url === "/api/boards") return Response.json(multiBoards);
+        if (url.includes("/search")) return Response.json(searchResults);
+        if (url.includes("/data")) return Response.json(initialData);
+        return Response.json(initialData);
+      })
+    );
+
+    render(<AuthenticatedApp />);
+    await signIn();
+
+    await screen.findByLabelText("Search boards and cards");
+    await userEvent.type(screen.getByLabelText("Search boards and cards"), "Board");
+
+    const resultsList = await screen.findByRole("list", { name: /search results/i });
+    const resultButton = within(resultsList).getAllByRole("button")[0];
+    await userEvent.click(resultButton);
 
     expect(await screen.findAllByTestId(/column-/i)).toHaveLength(5);
   });

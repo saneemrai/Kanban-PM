@@ -340,6 +340,17 @@ export const KanbanBoard = ({
     });
   };
 
+  const handleMoveCard = (cardId: string, fromColumnId: string, toColumnId: string) => {
+    commitBoard({
+      ...board,
+      columns: board.columns.map((col) => {
+        if (col.id === fromColumnId) return { ...col, cardIds: col.cardIds.filter((id) => id !== cardId) };
+        if (col.id === toColumnId) return { ...col, cardIds: [...col.cardIds, cardId] };
+        return col;
+      }),
+    });
+  };
+
   const handleArchiveCard = async (cardId: string) => {
     try {
       const updatedBoard = await archiveCard(sessionToken, boardId, cardId);
@@ -631,6 +642,8 @@ export const KanbanBoard = ({
                     onArchiveCard={handleArchiveCard}
                     onDuplicateCard={handleDuplicateCard}
                     onSetWipLimit={handleSetWipLimit}
+                    onMoveCard={(cardId, toColumnId) => handleMoveCard(cardId, column.id, toColumnId)}
+                    allColumns={board.columns.map((c) => ({ id: c.id, title: c.title }))}
                   />
                 );
               })}

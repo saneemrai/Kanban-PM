@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { ApiError, BOARD_TEMPLATES, createBoard, deleteBoard, updateBoardMeta, type BoardSummary, type BoardTemplate } from "@/lib/api";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ApiError, BOARD_TEMPLATES, createBoard, deleteBoard, searchAll, updateBoardMeta, type BoardSummary, type BoardTemplate, type SearchResult } from "@/lib/api";
 
 type BoardSelectorProps = {
   sessionToken: string;
@@ -33,6 +33,32 @@ export const BoardSelector = ({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editState, setEditState] = useState<EditState>({ title: "", description: "" });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    searchTimer.current = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const results = await searchAll(sessionToken, searchQuery.trim());
+        setSearchResults(results);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [searchQuery, sessionToken]);
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -133,6 +159,71 @@ export const BoardSelector = ({
             </button>
           </div>
         </header>
+
+        <div className="relative">
+          <div className="flex items-center gap-3 rounded-2xl border border-[var(--stroke)] bg-white px-4 py-3 shadow-[var(--shadow)]">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="shrink-0 text-[var(--gray-text)]">
+              <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4"/>
+              <path d="M10 10l4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search boards and cards..."
+              aria-label="Search boards and cards"
+              className="flex-1 bg-transparent text-sm font-medium text-[var(--navy-dark)] outline-none placeholder:text-[var(--gray-text)]"
+            />
+            {isSearching ? (
+              <span className="text-xs text-[var(--gray-text)]">Searching...</span>
+            ) : null}
+          </div>
+          {searchQuery.trim().length >= 2 ? (
+            <div className="mt-2 rounded-2xl border border-[var(--stroke)] bg-white shadow-[var(--shadow)]">
+              {searchResults.length === 0 && !isSearching ? (
+                <p className="px-4 py-3 text-sm text-[var(--gray-text)]">No results found.</p>
+              ) : (
+                <ul role="list" aria-label="Search results">
+                  {searchResults.map((result, i) => (
+                    <li key={i}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery("");
+                          onSelectBoard(result.boardId);
+                        }}
+                        className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-[var(--surface)] first:rounded-t-2xl last:rounded-b-2xl"
+                      >
+                        {result.type === "board" ? (
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" className="mt-0.5 shrink-0 text-[var(--primary-blue)]">
+                            <rect x="1" y="2" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+                            <path d="M1 5.5h12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                            <path d="M4 8.5h6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                          </svg>
+                        ) : (
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" className="mt-0.5 shrink-0 text-[var(--secondary-purple)]">
+                            <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.3"/>
+                            <path d="M4 5h6M4 8h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                          </svg>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-[var(--navy-dark)]">
+                            {result.type === "card" ? result.cardTitle : result.boardTitle}
+                          </p>
+                          <p className="truncate text-xs text-[var(--gray-text)]">
+                            {result.type === "card"
+                              ? `${result.boardTitle} · ${result.columnTitle}`
+                              : "Board"}
+                          </p>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : null}
+        </div>
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {boards.map((board) => (

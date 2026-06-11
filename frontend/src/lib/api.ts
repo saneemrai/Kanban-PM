@@ -426,6 +426,26 @@ export const revokeSession = async (sessionToken: string, sessionId: number): Pr
   }
 };
 
+export type SearchResult = {
+  type: "board" | "card";
+  boardId: number;
+  boardTitle: string;
+  cardId: string | null;
+  cardTitle: string | null;
+  cardDetails: string | null;
+  columnTitle: string | null;
+};
+
+export const searchAll = async (
+  sessionToken: string,
+  query: string
+): Promise<SearchResult[]> => {
+  const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+    headers: sessionHeaders(sessionToken),
+  });
+  return parseResponse(response);
+};
+
 export const sendAiChatMessage = async (
   sessionToken: string,
   boardId: number,

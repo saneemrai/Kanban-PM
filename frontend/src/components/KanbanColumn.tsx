@@ -17,6 +17,8 @@ type KanbanColumnProps = {
   onArchiveCard?: (cardId: string) => void;
   onDuplicateCard?: (columnId: string, cardId: string) => void;
   onSetWipLimit?: (columnId: string, limit: number | null) => void;
+  onMoveCard?: (cardId: string, toColumnId: string) => void;
+  allColumns?: { id: string; title: string }[];
 };
 
 export const KanbanColumn = ({
@@ -30,6 +32,8 @@ export const KanbanColumn = ({
   onArchiveCard,
   onDuplicateCard,
   onSetWipLimit,
+  onMoveCard,
+  allColumns,
 }: KanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const { setNodeRef: setEndDropRef, isOver: isEndOver } = useDroppable({
@@ -177,6 +181,8 @@ export const KanbanColumn = ({
               onEdit={onEditCard}
               onArchive={onArchiveCard}
               onDuplicate={onDuplicateCard ? (cardId) => onDuplicateCard(column.id, cardId) : undefined}
+              onMove={onMoveCard ? (toColumnId) => onMoveCard(card.id, toColumnId) : undefined}
+              otherColumns={allColumns ? allColumns.filter((c) => c.id !== column.id) : undefined}
             />
           ))}
         </SortableContext>

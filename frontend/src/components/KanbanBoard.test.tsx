@@ -601,6 +601,22 @@ describe("KanbanBoard", () => {
     expect(within(stats).getByText(/done sp/i)).toBeInTheDocument();
   });
 
+  it("moves a card to another column via quick-move menu", async () => {
+    mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    const card = screen.getByTestId("card-card-1");
+    await userEvent.click(within(card).getByRole("button", { name: /move align roadmap themes/i }));
+
+    await userEvent.click(within(card).getByRole("menuitem", { name: "Discovery" }));
+
+    const discoveryColumn = screen.getByTestId("column-col-discovery");
+    expect(within(discoveryColumn).getByText("Align roadmap themes")).toBeInTheDocument();
+    const backlogColumn = screen.getByTestId("column-col-backlog");
+    expect(within(backlogColumn).queryByText("Align roadmap themes")).not.toBeInTheDocument();
+  });
+
   it("shows story points badge on card and SP total in column when estimate is set", async () => {
     const boardWithEstimates = {
       ...initialData,

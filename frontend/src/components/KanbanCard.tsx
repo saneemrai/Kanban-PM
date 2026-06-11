@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
@@ -64,9 +65,12 @@ type KanbanCardProps = {
   onEdit: (cardId: string) => void;
   onArchive?: (cardId: string) => void;
   onDuplicate?: (cardId: string) => void;
+  onMove?: (targetColumnId: string) => void;
+  otherColumns?: { id: string; title: string }[];
 };
 
-export const KanbanCard = ({ card, onDelete, onEdit, onArchive, onDuplicate }: KanbanCardProps) => {
+export const KanbanCard = ({ card, onDelete, onEdit, onArchive, onDuplicate, onMove, otherColumns }: KanbanCardProps) => {
+  const [moveMenuOpen, setMoveMenuOpen] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: card.id });
 
@@ -163,6 +167,55 @@ export const KanbanCard = ({ card, onDelete, onEdit, onArchive, onDuplicate }: K
                 <path d="M4 3V2a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
               </svg>
             </button>
+          ) : null}
+          {onMove && otherColumns && otherColumns.length > 0 ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setMoveMenuOpen((o) => !o); }}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="rounded-lg p-1.5 text-[var(--gray-text)] opacity-0 transition-all hover:bg-[var(--surface)] hover:text-[var(--navy-dark)] group-hover:opacity-100"
+                aria-label={`Move ${card.title} to another column`}
+                aria-expanded={moveMenuOpen}
+                aria-haspopup="menu"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {moveMenuOpen ? (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setMoveMenuOpen(false)}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    aria-hidden="true"
+                  />
+                  <div
+                    className="absolute right-0 top-full z-20 mt-1 w-36 rounded-xl border border-[var(--stroke)] bg-white py-1 shadow-lg"
+                    role="menu"
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    {otherColumns.map((col) => (
+                      <button
+                        key={col.id}
+                        type="button"
+                        role="menuitem"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onMove(col.id);
+                          setMoveMenuOpen(false);
+                        }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        className="w-full px-3 py-1.5 text-left text-xs font-medium text-[var(--navy-dark)] transition-colors hover:bg-[var(--surface)]"
+                      >
+                        {col.title}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </div>
           ) : null}
           <button
             type="button"

@@ -42,6 +42,7 @@ from app.board_store import (
     revoke_session,
     save_board,
     save_board_by_id,
+    search_boards_and_cards,
     update_checklist_item,
     _get_first_board_id,
 )
@@ -83,6 +84,14 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
     def read_session(x_pm_session: str | None = Header(default=None)):
         username = get_username_for_session(app.state.db_path, x_pm_session)
         return {"username": username}
+
+    @app.get("/api/search")
+    def search(
+        q: str = "",
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        return search_boards_and_cards(app.state.db_path, username, q)
 
     @app.get("/api/boards")
     def read_boards(x_pm_session: str | None = Header(default=None)) -> list[BoardSummary]:

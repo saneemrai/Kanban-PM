@@ -1986,3 +1986,83 @@ def test_sessions_require_session(tmp_path: Path) -> None:
 
     assert client.get("/api/user/sessions").status_code == 401
     assert client.delete("/api/user/sessions/1").status_code == 401
+
+
+# --- Global search tests ---
+
+def test_search_requires_session(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+
+    assert client.get("/api/search?q=anything").status_code == 401
+
+
+def test_search_returns_empty_for_short_query(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+
+    response = client.get("/api/search?q=a", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_search_finds_board_by_title(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    client.post("/api/boards", json={"title": "Marketing Sprint"}, headers=headers)
+
+    response = client.get("/api/search?q=Marketing", headers=headers)
+
+    assert response.status_code == 200
+    results = response.json()
+    assert any(r["type"] == "board" and "Marketing" in r["boardTitle"] for r in results)
+
+
+def test_search_finds_card_by_title(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    new_id = "card-search-test"
+    board["cards"][new_id] = {"id": new_id, "title": "Unique searchable title", "details": "some details"}
+    board["columns"][0]["cardIds"].append(new_id)
+    client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    response = client.get("/api/search?q=searchable", headers=headers)
+
+    assert response.status_code == 200
+    results = response.json()
+    card_results = [r for r in results if r["type"] == "card"]
+    assert any(r["cardTitle"] == "Unique searchable title" for r in card_results)
+    assert all(r["boardId"] == board_id for r in card_results)
+    assert all(r["columnTitle"] is not None for r in card_results)
+
+
+def test_search_does_not_return_results_from_other_users(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    client.post("/api/boards", json={"title": "User Secret Board"}, headers=headers)
+
+    alice_headers = _register_and_headers(client)
+
+    response = client.get("/api/search?q=Secret", headers=alice_headers)
+
+    assert response.status_code == 200
+    results = response.json()
+    assert not any("Secret" in r["boardTitle"] for r in results)
+
+
+def test_search_does_not_return_archived_cards(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    card_title = board["cards"][card_id]["title"]
+    client.post(f"/api/boards/{board_id}/cards/{card_id}/archive", headers=headers)
+
+    response = client.get(f"/api/search?q={card_title[:8]}", headers=headers)
+
+    assert response.status_code == 200
+    results = response.json()
+    card_results = [r for r in results if r["type"] == "card"]
+    assert not any(r["cardId"] == card_id for r in card_results)
