@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { ApiError, createBoard, deleteBoard, type BoardSummary } from "@/lib/api";
+import { ApiError, BOARD_TEMPLATES, createBoard, deleteBoard, type BoardSummary, type BoardTemplate } from "@/lib/api";
 
 type BoardSelectorProps = {
   sessionToken: string;
@@ -23,6 +23,7 @@ export const BoardSelector = ({
   onLogout,
 }: BoardSelectorProps) => {
   const [newBoardTitle, setNewBoardTitle] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState<BoardTemplate>("default");
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -35,7 +36,7 @@ export const BoardSelector = ({
     setIsCreating(true);
     setCreateError("");
     try {
-      const created = await createBoard(sessionToken, title);
+      const created = await createBoard(sessionToken, title, selectedTemplate);
       onBoardsChanged([...boards, created]);
       setNewBoardTitle("");
     } catch (error) {
@@ -149,6 +150,32 @@ export const BoardSelector = ({
                 maxLength={80}
                 className="w-full border border-[var(--stroke)] px-3 py-2.5 text-sm font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
               />
+              <p className="text-xs font-semibold text-[var(--gray-text)] mt-1">Template</p>
+              <div className="grid grid-cols-1 gap-2">
+                {BOARD_TEMPLATES.map((tpl) => (
+                  <label
+                    key={tpl.value}
+                    className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2.5 transition ${
+                      selectedTemplate === tpl.value
+                        ? "border-[var(--primary-blue)] bg-[rgba(32,157,215,0.06)]"
+                        : "border-[var(--stroke)] hover:border-[var(--primary-blue)]/50"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="template"
+                      value={tpl.value}
+                      checked={selectedTemplate === tpl.value}
+                      onChange={() => setSelectedTemplate(tpl.value)}
+                      className="mt-0.5 accent-[var(--primary-blue)]"
+                    />
+                    <div>
+                      <p className="text-xs font-semibold text-[var(--navy-dark)]">{tpl.label}</p>
+                      <p className="text-[10px] text-[var(--gray-text)]">{tpl.description}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
               {createError ? (
                 <p className="text-xs font-semibold text-[var(--secondary-purple)]">
                   {createError}

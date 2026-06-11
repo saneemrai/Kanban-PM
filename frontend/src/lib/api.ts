@@ -107,9 +107,19 @@ export const fetchBoards = async (sessionToken: string): Promise<BoardSummary[]>
   return parseResponse(response);
 };
 
+export type BoardTemplate = "default" | "sprint" | "kanban" | "feature";
+
+export const BOARD_TEMPLATES: { value: BoardTemplate; label: string; description: string }[] = [
+  { value: "default", label: "Project Board", description: "Backlog / Discovery / In Progress / Review / Done" },
+  { value: "sprint", label: "Sprint Board", description: "Backlog / Selected / In Progress / Testing / Done" },
+  { value: "kanban", label: "Kanban Flow", description: "Backlog / Ready / In Progress / Review / Done" },
+  { value: "feature", label: "Feature Pipeline", description: "Ideas / Design / Build / Test / Released" },
+];
+
 export const createBoard = async (
   sessionToken: string,
-  title: string
+  title: string,
+  template: BoardTemplate = "default"
 ): Promise<BoardSummary> => {
   const response = await fetch("/api/boards", {
     method: "POST",
@@ -117,7 +127,7 @@ export const createBoard = async (
       ...sessionHeaders(sessionToken),
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ title }),
+    body: JSON.stringify({ title, template }),
   });
   return parseResponse(response);
 };

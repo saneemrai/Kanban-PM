@@ -1605,3 +1605,65 @@ def test_assignee_rejects_over_100_chars(tmp_path: Path) -> None:
     response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
 
     assert response.status_code == 422
+
+
+# --- Board template tests ---
+
+def test_default_template_creates_board_with_standard_columns(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+
+    response = client.post("/api/boards", json={"title": "Sprint Board", "template": "default"}, headers=headers)
+    assert response.status_code == 201
+    board_id = response.json()["id"]
+
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    titles = [col["title"] for col in board["columns"]]
+    assert titles == ["Backlog", "Discovery", "In Progress", "Review", "Done"]
+
+
+def test_sprint_template_applies_sprint_column_titles(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+
+    response = client.post("/api/boards", json={"title": "My Sprint", "template": "sprint"}, headers=headers)
+    assert response.status_code == 201
+    board_id = response.json()["id"]
+
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    titles = [col["title"] for col in board["columns"]]
+    assert titles == ["Backlog", "Selected", "In Progress", "Testing", "Done"]
+
+
+def test_feature_template_applies_feature_column_titles(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+
+    response = client.post("/api/boards", json={"title": "Feature Flow", "template": "feature"}, headers=headers)
+    assert response.status_code == 201
+    board_id = response.json()["id"]
+
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    titles = [col["title"] for col in board["columns"]]
+    assert titles == ["Ideas", "Design", "Build", "Test", "Released"]
+
+
+def test_sprint_template_starts_with_empty_columns(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+
+    response = client.post("/api/boards", json={"title": "Empty Sprint", "template": "sprint"}, headers=headers)
+    board_id = response.json()["id"]
+
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    assert board["cards"] == {}
+    for col in board["columns"]:
+        assert col["cardIds"] == []
+
+
+def test_invalid_template_returns_422(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+
+    response = client.post("/api/boards", json={"title": "Bad Board", "template": "invalid_template"}, headers=headers)
+    assert response.status_code == 422

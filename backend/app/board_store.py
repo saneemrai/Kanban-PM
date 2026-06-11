@@ -86,6 +86,40 @@ class RegisterPayload(BaseModel):
     password: str
 
 
+VALID_TEMPLATES = {"default", "sprint", "kanban", "feature"}
+
+TEMPLATE_COLUMNS: dict[str, list[tuple[str, str]]] = {
+    "default": [
+        ("col-backlog", "Backlog"),
+        ("col-discovery", "Discovery"),
+        ("col-progress", "In Progress"),
+        ("col-review", "Review"),
+        ("col-done", "Done"),
+    ],
+    "sprint": [
+        ("col-backlog", "Backlog"),
+        ("col-discovery", "Selected"),
+        ("col-progress", "In Progress"),
+        ("col-review", "Testing"),
+        ("col-done", "Done"),
+    ],
+    "kanban": [
+        ("col-backlog", "Backlog"),
+        ("col-discovery", "Ready"),
+        ("col-progress", "In Progress"),
+        ("col-review", "Review"),
+        ("col-done", "Done"),
+    ],
+    "feature": [
+        ("col-backlog", "Ideas"),
+        ("col-discovery", "Design"),
+        ("col-progress", "Build"),
+        ("col-review", "Test"),
+        ("col-done", "Released"),
+    ],
+}
+
+
 # Keep in sync with frontend/src/lib/kanban.ts initialData
 DEFAULT_COLUMNS = [
     Column(id="col-backlog", title="Backlog", cardIds=["card-1", "card-2"]),
@@ -526,7 +560,7 @@ def _ensure_default_user(connection: sqlite3.Connection) -> None:
 
 
 def _create_board_with_seed_data(
-    connection: sqlite3.Connection, user_id: int, title: str
+    connection: sqlite3.Connection, user_id: int, title: str, template: str = "default"
 ) -> int:
     connection.execute(
         "INSERT INTO boards (user_id, title) VALUES (?, ?)",
@@ -536,12 +570,15 @@ def _create_board_with_seed_data(
         "SELECT id FROM boards WHERE user_id = ? ORDER BY id DESC LIMIT 1",
         (user_id,),
     ).fetchone()["id"]
+    col_defs = TEMPLATE_COLUMNS.get(template, TEMPLATE_COLUMNS["default"])
     for position, column in enumerate(DEFAULT_BOARD.columns):
+        col_title = col_defs[position][1] if position < len(col_defs) else column.title
         connection.execute(
             "INSERT INTO columns (board_id, key, title, position) VALUES (?, ?, ?, ?)",
-            (board_id, column.id, column.title, position),
+            (board_id, column.id, col_title, position),
         )
-    insert_board_cards(connection, board_id, DEFAULT_BOARD)
+    if template == "default":
+        insert_board_cards(connection, board_id, DEFAULT_BOARD)
     return board_id
 
 
@@ -673,10 +710,12 @@ def list_boards(db_path: Path, username: str) -> list[BoardSummary]:
     ]
 
 
-def create_board(db_path: Path, username: str, title: str) -> BoardSummary:
+def create_board(db_path: Path, username: str, title: str, template: str = "default") -> BoardSummary:
     title = title.strip()
     if not title:
         raise HTTPException(status_code=422, detail="Board title is required.")
+    if template not in VALID_TEMPLATES:
+        raise HTTPException(status_code=422, detail=f"Invalid template '{template}'.")
     with connect(db_path) as connection:
         row = connection.execute(
             "SELECT id FROM users WHERE username = ?", (username,)
@@ -684,7 +723,7 @@ def create_board(db_path: Path, username: str, title: str) -> BoardSummary:
         if row is None:
             raise HTTPException(status_code=404, detail="User not found.")
         user_id = row["id"]
-        board_id = _create_board_with_seed_data(connection, user_id, title)
+        board_id = _create_board_with_seed_data(connection, user_id, title, template)
         row = connection.execute(
             """
             SELECT b.id, b.title, b.updated_at, COUNT(c.id) AS card_count
