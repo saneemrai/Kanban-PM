@@ -1801,3 +1801,122 @@ def test_board_description_unchanged_if_not_in_patch(tmp_path: Path) -> None:
     boards = client.get("/api/boards", headers=headers).json()
     target = next(b for b in boards if b["id"] == board_id)
     assert target["description"] == "Keep me."
+
+
+# --- Card link tests ---
+
+def test_card_links_empty_initially(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+
+    response = client.get(
+        f"/api/boards/{board_id}/cards/{card_id}/links", headers=headers
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"blocking": [], "blockedBy": []}
+
+
+def test_add_card_link_creates_relationship(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    card_a = board["columns"][0]["cardIds"][0]
+    card_b = board["columns"][0]["cardIds"][1]
+
+    response = client.post(
+        f"/api/boards/{board_id}/cards/{card_a}/links",
+        json={"toCardId": card_b},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert any(l["id"] == card_b for l in data["blocking"])
+    assert data["blockedBy"] == []
+
+
+def test_blocked_by_shows_on_target_card(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    card_a = board["columns"][0]["cardIds"][0]
+    card_b = board["columns"][0]["cardIds"][1]
+
+    client.post(
+        f"/api/boards/{board_id}/cards/{card_a}/links",
+        json={"toCardId": card_b},
+        headers=headers,
+    )
+
+    links = client.get(f"/api/boards/{board_id}/cards/{card_b}/links", headers=headers).json()
+    assert any(l["id"] == card_a for l in links["blockedBy"])
+    assert links["blocking"] == []
+
+
+def test_delete_card_link_removes_relationship(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    card_a = board["columns"][0]["cardIds"][0]
+    card_b = board["columns"][0]["cardIds"][1]
+
+    client.post(
+        f"/api/boards/{board_id}/cards/{card_a}/links",
+        json={"toCardId": card_b},
+        headers=headers,
+    )
+    response = client.delete(
+        f"/api/boards/{board_id}/cards/{card_a}/links/{card_b}", headers=headers
+    )
+
+    assert response.status_code == 200
+    links = client.get(f"/api/boards/{board_id}/cards/{card_a}/links", headers=headers).json()
+    assert links["blocking"] == []
+
+
+def test_card_link_self_reference_rejected(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+
+    response = client.post(
+        f"/api/boards/{board_id}/cards/{card_id}/links",
+        json={"toCardId": card_id},
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_card_link_duplicate_rejected(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    card_a = board["columns"][0]["cardIds"][0]
+    card_b = board["columns"][0]["cardIds"][1]
+
+    client.post(f"/api/boards/{board_id}/cards/{card_a}/links", json={"toCardId": card_b}, headers=headers)
+    response = client.post(
+        f"/api/boards/{board_id}/cards/{card_a}/links",
+        json={"toCardId": card_b},
+        headers=headers,
+    )
+
+    assert response.status_code == 409
+
+
+def test_card_link_requires_session(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+
+    assert client.get(f"/api/boards/{board_id}/cards/{card_id}/links").status_code == 401
+    assert client.post(
+        f"/api/boards/{board_id}/cards/{card_id}/links", json={"toCardId": "x"}
+    ).status_code == 401

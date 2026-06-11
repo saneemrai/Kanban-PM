@@ -23,7 +23,7 @@ FIXED_COLUMN_IDS = [
     "col-done",
 ]
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 
 VALID_PRIORITIES = {"low", "medium", "high", "critical"}
@@ -284,6 +284,10 @@ def _run_migrations(connection: sqlite3.Connection) -> None:
         _migrate_to_v15(connection)
         connection.execute("UPDATE schema_version SET version = 15")
 
+    if version < 16:
+        _migrate_to_v16(connection)
+        connection.execute("UPDATE schema_version SET version = 16")
+
 
 def _migrate_to_v2(connection: sqlite3.Connection) -> None:
     connection.execute(
@@ -410,6 +414,22 @@ def _migrate_to_v4(connection: sqlite3.Connection) -> None:
     }
     if "due_date" not in card_cols:
         connection.execute("ALTER TABLE cards ADD COLUMN due_date TEXT")
+
+
+def _migrate_to_v16(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS card_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            board_id INTEGER NOT NULL,
+            from_card_id TEXT NOT NULL,
+            to_card_id TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (board_id) REFERENCES boards (id),
+            UNIQUE (board_id, from_card_id, to_card_id)
+        )
+        """
+    )
 
 
 def _migrate_to_v15(connection: sqlite3.Connection) -> None:
@@ -1427,3 +1447,74 @@ def delete_card_comment(
                 status_code=403, detail="You can only delete your own comments."
             )
         connection.execute("DELETE FROM comments WHERE id = ?", (comment_id,))
+
+
+def list_card_links(
+    db_path: Path, username: str, board_id: int, card_id: str
+) -> dict:
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        blocking_rows = connection.execute(
+            """
+            SELECT cl.to_card_id AS id, c.title
+            FROM card_links cl
+            JOIN cards c ON c.board_id = cl.board_id AND c.id = cl.to_card_id
+            WHERE cl.board_id = ? AND cl.from_card_id = ? AND c.archived = 0
+            """,
+            (board_id, card_id),
+        ).fetchall()
+        blocked_by_rows = connection.execute(
+            """
+            SELECT cl.from_card_id AS id, c.title
+            FROM card_links cl
+            JOIN cards c ON c.board_id = cl.board_id AND c.id = cl.from_card_id
+            WHERE cl.board_id = ? AND cl.to_card_id = ? AND c.archived = 0
+            """,
+            (board_id, card_id),
+        ).fetchall()
+    return {
+        "blocking": [{"id": r["id"], "title": r["title"]} for r in blocking_rows],
+        "blockedBy": [{"id": r["id"], "title": r["title"]} for r in blocked_by_rows],
+    }
+
+
+def add_card_link(
+    db_path: Path, username: str, board_id: int, from_card_id: str, to_card_id: str
+) -> dict:
+    if from_card_id == to_card_id:
+        raise HTTPException(status_code=422, detail="A card cannot link to itself.")
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        for cid in (from_card_id, to_card_id):
+            row = connection.execute(
+                "SELECT id FROM cards WHERE board_id = ? AND id = ? AND archived = 0",
+                (board_id, cid),
+            ).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail=f"Card '{cid}' not found.")
+        try:
+            connection.execute(
+                "INSERT INTO card_links (board_id, from_card_id, to_card_id) VALUES (?, ?, ?)",
+                (board_id, from_card_id, to_card_id),
+            )
+        except sqlite3.IntegrityError as error:
+            raise HTTPException(status_code=409, detail="Link already exists.") from error
+    return list_card_links(db_path, username, board_id, from_card_id)
+
+
+def delete_card_link(
+    db_path: Path, username: str, board_id: int, from_card_id: str, to_card_id: str
+) -> dict:
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        row = connection.execute(
+            "SELECT id FROM card_links WHERE board_id = ? AND from_card_id = ? AND to_card_id = ?",
+            (board_id, from_card_id, to_card_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Link not found.")
+        connection.execute(
+            "DELETE FROM card_links WHERE board_id = ? AND from_card_id = ? AND to_card_id = ?",
+            (board_id, from_card_id, to_card_id),
+        )
+    return list_card_links(db_path, username, board_id, from_card_id)

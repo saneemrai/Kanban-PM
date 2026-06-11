@@ -54,6 +54,18 @@ const mockBoardFetch = (board: BoardData = initialData) => {
     if (url.includes("/checklist")) {
       return Response.json([]);
     }
+    if (url.includes("/links") && init?.method === "POST") {
+      return new Response(
+        JSON.stringify({ blocking: [], blockedBy: [] }),
+        { status: 201, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("/links") && init?.method === "DELETE") {
+      return Response.json({ blocking: [], blockedBy: [] });
+    }
+    if (url.includes("/links")) {
+      return Response.json({ blocking: [], blockedBy: [] });
+    }
     if (url.includes("/archive") && !url.includes("/cards/") && init?.method !== "POST") {
       return Response.json([]);
     }
@@ -521,6 +533,16 @@ describe("KanbanBoard", () => {
     await screen.findAllByTestId(/column-/i);
 
     expect(screen.getByRole("button", { name: /export board/i })).toBeInTheDocument();
+  });
+
+  it("shows links section in card modal", async () => {
+    mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getAllByRole("button", { name: /edit /i })[0]);
+    expect(screen.getByRole("region", { name: /links/i })).toBeInTheDocument();
+    expect(screen.getByLabelText("Add card link")).toBeInTheDocument();
   });
 
   it("shows board description when provided as prop", async () => {

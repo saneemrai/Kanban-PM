@@ -366,6 +366,47 @@ export const deleteComment = async (
   }
 };
 
+export type CardLinkEntry = { id: string; title: string };
+export type CardLinks = { blocking: CardLinkEntry[]; blockedBy: CardLinkEntry[] };
+
+export const listCardLinks = async (
+  sessionToken: string,
+  boardId: number,
+  cardId: string
+): Promise<CardLinks> => {
+  const response = await fetch(`/api/boards/${boardId}/cards/${cardId}/links`, {
+    headers: sessionHeaders(sessionToken),
+  });
+  return parseResponse(response);
+};
+
+export const addCardLink = async (
+  sessionToken: string,
+  boardId: number,
+  fromCardId: string,
+  toCardId: string
+): Promise<CardLinks> => {
+  const response = await fetch(`/api/boards/${boardId}/cards/${fromCardId}/links`, {
+    method: "POST",
+    headers: { ...sessionHeaders(sessionToken), "Content-Type": "application/json" },
+    body: JSON.stringify({ toCardId }),
+  });
+  return parseResponse(response);
+};
+
+export const deleteCardLink = async (
+  sessionToken: string,
+  boardId: number,
+  fromCardId: string,
+  toCardId: string
+): Promise<CardLinks> => {
+  const response = await fetch(`/api/boards/${boardId}/cards/${fromCardId}/links/${toCardId}`, {
+    method: "DELETE",
+    headers: sessionHeaders(sessionToken),
+  });
+  return parseResponse(response);
+};
+
 export const sendAiChatMessage = async (
   sessionToken: string,
   boardId: number,

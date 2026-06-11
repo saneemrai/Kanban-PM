@@ -13,6 +13,7 @@ from app.board_store import (
     LoginPayload,
     RegisterPayload,
     add_card_comment,
+    add_card_link,
     add_checklist_item,
     archive_card,
     change_user_password,
@@ -21,6 +22,7 @@ from app.board_store import (
     create_session,
     delete_board,
     delete_card_comment,
+    delete_card_link,
     delete_checklist_item,
     delete_session,
     get_board,
@@ -31,6 +33,7 @@ from app.board_store import (
     list_archived_cards,
     list_boards,
     list_card_comments,
+    list_card_links,
     list_checklist_items,
     register_user,
     rename_board,
@@ -286,6 +289,38 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
     ):
         username = get_username_for_session(app.state.db_path, x_pm_session)
         delete_card_comment(app.state.db_path, username, board_id, comment_id)
+
+    @app.get("/api/boards/{board_id}/cards/{card_id}/links")
+    def read_card_links(
+        board_id: int,
+        card_id: str,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        return list_card_links(app.state.db_path, username, board_id, card_id)
+
+    @app.post("/api/boards/{board_id}/cards/{card_id}/links", status_code=201)
+    def create_card_link(
+        board_id: int,
+        card_id: str,
+        payload: dict,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        to_card_id = payload.get("toCardId", "")
+        if not to_card_id:
+            raise HTTPException(status_code=422, detail="toCardId is required.")
+        return add_card_link(app.state.db_path, username, board_id, card_id, to_card_id)
+
+    @app.delete("/api/boards/{board_id}/cards/{card_id}/links/{to_card_id}", status_code=200)
+    def remove_card_link(
+        board_id: int,
+        card_id: str,
+        to_card_id: str,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        return delete_card_link(app.state.db_path, username, board_id, card_id, to_card_id)
 
     @app.post("/api/user/password")
     def update_password(

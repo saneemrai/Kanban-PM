@@ -4,12 +4,16 @@ import { useState, useRef, useEffect, type FormEvent, type KeyboardEvent } from 
 import type { Card, Priority } from "@/lib/kanban";
 import {
   addComment,
+  addCardLink,
   addChecklistItem,
+  deleteCardLink,
   deleteComment,
   deleteChecklistItem,
+  listCardLinks,
   listComments,
   listChecklist,
   toggleChecklistItem,
+  type CardLinkEntry,
   type ChecklistItem,
   type Comment,
 } from "@/lib/api";
@@ -57,6 +61,7 @@ type CardDetailModalProps = {
   sessionToken: string;
   boardId: number;
   username?: string;
+  allCards?: Record<string, Card>;
   onSave: (updates: Pick<Card, "title" | "details" | "priority" | "due_date" | "labels" | "estimate" | "assignee" | "color">) => void;
   onClose: () => void;
 };
@@ -66,6 +71,7 @@ export const CardDetailModal = ({
   sessionToken,
   boardId,
   username,
+  allCards,
   onSave,
   onClose,
 }: CardDetailModalProps) => {
@@ -80,6 +86,9 @@ export const CardDetailModal = ({
   const [labelInput, setLabelInput] = useState("");
   const labelInputRef = useRef<HTMLInputElement>(null);
 
+  const [links, setLinks] = useState<{ blocking: CardLinkEntry[]; blockedBy: CardLinkEntry[] }>({ blocking: [], blockedBy: [] });
+  const [linkSearch, setLinkSearch] = useState("");
+
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [newItemText, setNewItemText] = useState("");
 
@@ -88,6 +97,31 @@ export const CardDetailModal = ({
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [commentError, setCommentError] = useState("");
   const commentsEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    listCardLinks(sessionToken, boardId, card.id)
+      .then(setLinks)
+      .catch(() => {});
+  }, [sessionToken, boardId, card.id]);
+
+  const handleAddLink = async (toCardId: string) => {
+    try {
+      const updated = await addCardLink(sessionToken, boardId, card.id, toCardId);
+      setLinks(updated);
+      setLinkSearch("");
+    } catch {
+      // silently fail
+    }
+  };
+
+  const handleRemoveLink = async (toCardId: string) => {
+    try {
+      const updated = await deleteCardLink(sessionToken, boardId, card.id, toCardId);
+      setLinks(updated);
+    } catch {
+      // silently fail
+    }
+  };
 
   useEffect(() => {
     listChecklist(sessionToken, boardId, card.id)
@@ -383,6 +417,99 @@ export const CardDetailModal = ({
               </button>
             </div>
           </form>
+
+          <section
+            aria-label="Links"
+            className="border-t border-[var(--stroke)] px-6 pb-4 pt-5"
+          >
+            <p className="text-sm font-semibold text-[var(--navy-dark)]">
+              Links
+              {(links.blocking.length + links.blockedBy.length) > 0 ? (
+                <span className="ml-2 text-xs font-normal text-[var(--gray-text)]">
+                  {links.blocking.length + links.blockedBy.length}
+                </span>
+              ) : null}
+            </p>
+            {links.blockedBy.length > 0 ? (
+              <div className="mt-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--gray-text)]">Blocked by</p>
+                <ul className="mt-1 space-y-1">
+                  {links.blockedBy.map((l) => (
+                    <li key={l.id} className="flex items-center gap-2 rounded px-2 py-1 bg-red-50 text-xs text-[var(--navy-dark)]">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+                      <span className="flex-1 truncate">{l.title}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {links.blocking.length > 0 ? (
+              <div className="mt-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--gray-text)]">Blocking</p>
+                <ul className="mt-1 space-y-1">
+                  {links.blocking.map((l) => (
+                    <li key={l.id} className="group flex items-center gap-2 rounded px-2 py-1 bg-orange-50 text-xs text-[var(--navy-dark)]">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-orange-500" />
+                      <span className="flex-1 truncate">{l.title}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveLink(l.id)}
+                        aria-label={`Remove link to ${l.title}`}
+                        className="shrink-0 rounded p-0.5 text-[var(--gray-text)] opacity-0 transition hover:text-red-600 group-hover:opacity-100"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                          <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {allCards ? (
+              <div className="mt-3 relative">
+                <input
+                  type="search"
+                  value={linkSearch}
+                  onChange={(e) => setLinkSearch(e.target.value)}
+                  placeholder="Add blocking link…"
+                  aria-label="Add card link"
+                  className="w-full rounded border border-[var(--stroke)] px-3 py-2 text-xs font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+                />
+                {linkSearch.trim() ? (
+                  <ul className="absolute z-10 mt-1 w-full rounded border border-[var(--stroke)] bg-white shadow-lg max-h-40 overflow-y-auto">
+                    {Object.values(allCards)
+                      .filter(
+                        (c) =>
+                          c.id !== card.id &&
+                          !links.blocking.some((l) => l.id === c.id) &&
+                          c.title.toLowerCase().includes(linkSearch.toLowerCase())
+                      )
+                      .slice(0, 8)
+                      .map((c) => (
+                        <li key={c.id}>
+                          <button
+                            type="button"
+                            onClick={() => handleAddLink(c.id)}
+                            className="w-full px-3 py-2 text-left text-xs text-[var(--navy-dark)] hover:bg-[var(--surface)] truncate"
+                          >
+                            {c.title}
+                          </button>
+                        </li>
+                      ))}
+                    {Object.values(allCards).filter(
+                      (c) =>
+                        c.id !== card.id &&
+                        !links.blocking.some((l) => l.id === c.id) &&
+                        c.title.toLowerCase().includes(linkSearch.toLowerCase())
+                    ).length === 0 ? (
+                      <li className="px-3 py-2 text-xs text-[var(--gray-text)]">No matching cards</li>
+                    ) : null}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
 
           <section
             aria-label="Checklist"

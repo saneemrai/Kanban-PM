@@ -651,6 +651,7 @@ export const KanbanBoard = ({
             sessionToken={sessionToken}
             boardId={boardId}
             username={username}
+            allCards={board.cards}
             onSave={handleSaveCard}
             onClose={() => setEditingCardId(null)}
           />
