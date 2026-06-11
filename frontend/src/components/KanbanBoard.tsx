@@ -24,6 +24,7 @@ const collisionDetection: CollisionDetection = (args) => {
 };
 import { AiChatSidebar } from "@/components/AiChatSidebar";
 import { CardDetailModal } from "@/components/CardDetailModal";
+import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 import { FilterBar, defaultFilter, isFilterActive, type FilterState } from "@/components/FilterBar";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
@@ -69,6 +70,7 @@ export const KanbanBoard = ({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [filter, setFilter] = useState<FilterState>(defaultFilter);
   const [titleDraft, setTitleDraft] = useState(boardTitle);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -398,6 +400,17 @@ export const KanbanBoard = ({
             </button>
             <button
               type="button"
+              onClick={() => setIsChangingPassword(true)}
+              aria-label="Change password"
+              className="rounded-full border border-[var(--stroke)] p-2 text-[var(--gray-text)] transition hover:bg-[var(--surface)]"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <circle cx="7" cy="5.5" r="3" stroke="currentColor" strokeWidth="1.3"/>
+                <path d="M1.5 12.5c0-2.5 2.5-4 5.5-4s5.5 1.5 5.5 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              </svg>
+            </button>
+            <button
+              type="button"
               onClick={onLogout}
               aria-label="Log out"
               className="inline-flex items-center gap-2 rounded-full border border-[var(--stroke)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--navy-dark)] transition hover:bg-[var(--surface)]"
@@ -454,6 +467,13 @@ export const KanbanBoard = ({
             card={board.cards[editingCardId]}
             onSave={handleSaveCard}
             onClose={() => setEditingCardId(null)}
+          />
+        ) : null}
+
+        {isChangingPassword ? (
+          <ChangePasswordModal
+            sessionToken={sessionToken}
+            onClose={() => setIsChangingPassword(false)}
           />
         ) : null}
 

@@ -76,6 +76,21 @@ export const logout = async (sessionToken: string): Promise<void> => {
   });
 };
 
+export const changePassword = async (
+  sessionToken: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<void> => {
+  const response = await fetch("/api/user/password", {
+    method: "POST",
+    headers: { ...sessionHeaders(sessionToken), "Content-Type": "application/json" },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  if (!response.ok) {
+    throw new ApiError(`Request failed with status ${response.status}`, response.status);
+  }
+};
+
 export const checkSession = async (sessionToken: string): Promise<void> => {
   const response = await fetch("/api/session", {
     headers: sessionHeaders(sessionToken),

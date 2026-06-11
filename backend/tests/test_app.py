@@ -836,3 +836,55 @@ def test_card_labels_rejects_label_over_30_chars(tmp_path: Path) -> None:
     response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
 
     assert response.status_code == 422
+
+
+def test_change_password_accepts_valid_current_password(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+
+    response = client.post(
+        "/api/user/password",
+        json={"currentPassword": "password", "newPassword": "newpass1"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    # Old credentials should no longer work
+    assert client.post("/api/login", json={"username": "user", "password": "password"}).status_code == 401
+    # New credentials should work
+    assert client.post("/api/login", json={"username": "user", "password": "newpass1"}).status_code == 200
+
+
+def test_change_password_rejects_wrong_current_password(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+
+    response = client.post(
+        "/api/user/password",
+        json={"currentPassword": "wrongpassword", "newPassword": "newpass1"},
+        headers=headers,
+    )
+
+    assert response.status_code == 401
+
+
+def test_change_password_rejects_short_new_password(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+
+    response = client.post(
+        "/api/user/password",
+        json={"currentPassword": "password", "newPassword": "abc"},
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_change_password_requires_session(tmp_path: Path) -> None:
+    response = make_client(tmp_path).post(
+        "/api/user/password",
+        json={"currentPassword": "password", "newPassword": "newpass1"},
+    )
+
+    assert response.status_code == 401

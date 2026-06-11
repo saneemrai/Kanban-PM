@@ -472,6 +472,27 @@ def create_session(db_path: Path, username: str, password: str) -> str:
     return token
 
 
+def change_user_password(
+    db_path: Path, username: str, current_password: str, new_password: str
+) -> None:
+    if len(new_password) < 6:
+        raise HTTPException(
+            status_code=422, detail="New password must be at least 6 characters."
+        )
+    with connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT password_hash FROM users WHERE username = ?", (username,)
+        ).fetchone()
+        if row is None or not verify_password(current_password, row["password_hash"]):
+            raise HTTPException(
+                status_code=401, detail="Current password is incorrect."
+            )
+        connection.execute(
+            "UPDATE users SET password_hash = ? WHERE username = ?",
+            (hash_password(new_password), username),
+        )
+
+
 def delete_session(db_path: Path, token: str) -> None:
     with connect(db_path) as connection:
         connection.execute("DELETE FROM sessions WHERE token = ?", (token,))

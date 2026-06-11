@@ -12,6 +12,7 @@ from app.board_store import (
     BoardSummary,
     LoginPayload,
     RegisterPayload,
+    change_user_password,
     connect as db_connect,
     create_board,
     create_session,
@@ -163,6 +164,17 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
             "boardChanged": True,
             "board": saved_board.model_dump(),
         }
+
+    @app.post("/api/user/password")
+    def update_password(
+        payload: dict,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        current = payload.get("currentPassword", "")
+        new = payload.get("newPassword", "")
+        change_user_password(app.state.db_path, username, current, new)
+        return {"status": "ok"}
 
     # Backward-compat aliases (use first board)
     @app.get("/api/board")
