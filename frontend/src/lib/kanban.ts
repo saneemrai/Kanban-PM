@@ -235,6 +235,36 @@ export const matchesFilter = (
   return true;
 };
 
+const PRIORITY_ORDER: Record<string, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+export type SortMode = "default" | "title" | "priority" | "due_date";
+
+export const sortCards = (cards: Card[], mode: SortMode): Card[] => {
+  if (mode === "default") return cards;
+  return [...cards].sort((a, b) => {
+    if (mode === "title") {
+      return a.title.localeCompare(b.title);
+    }
+    if (mode === "priority") {
+      const pa = a.priority ? (PRIORITY_ORDER[a.priority] ?? 4) : 4;
+      const pb = b.priority ? (PRIORITY_ORDER[b.priority] ?? 4) : 4;
+      return pa - pb;
+    }
+    if (mode === "due_date") {
+      if (!a.due_date && !b.due_date) return 0;
+      if (!a.due_date) return 1;
+      if (!b.due_date) return -1;
+      return a.due_date.localeCompare(b.due_date);
+    }
+    return 0;
+  });
+};
+
 export const createId = (prefix: string) => {
   const randomPart = Math.random().toString(36).slice(2, 8);
   const timePart = Date.now().toString(36);

@@ -12,17 +12,20 @@ from app.board_store import (
     BoardSummary,
     LoginPayload,
     RegisterPayload,
+    add_card_comment,
     change_user_password,
     connect as db_connect,
     create_board,
     create_session,
     delete_board,
+    delete_card_comment,
     delete_session,
     get_board,
     get_board_by_id,
     get_username_for_session,
     initialize_database,
     list_boards,
+    list_card_comments,
     register_user,
     rename_board,
     save_board,
@@ -164,6 +167,39 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
             "boardChanged": True,
             "board": saved_board.model_dump(),
         }
+
+    @app.get("/api/boards/{board_id}/cards/{card_id}/comments")
+    def read_card_comments(
+        board_id: int,
+        card_id: str,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        comments = list_card_comments(app.state.db_path, username, board_id, card_id)
+        return [c.model_dump() for c in comments]
+
+    @app.post("/api/boards/{board_id}/cards/{card_id}/comments", status_code=201)
+    def create_card_comment(
+        board_id: int,
+        card_id: str,
+        payload: dict,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        body = payload.get("body", "")
+        comment = add_card_comment(
+            app.state.db_path, username, board_id, card_id, body
+        )
+        return comment.model_dump()
+
+    @app.delete("/api/boards/{board_id}/comments/{comment_id}", status_code=204)
+    def remove_card_comment(
+        board_id: int,
+        comment_id: int,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        delete_card_comment(app.state.db_path, username, board_id, comment_id)
 
     @app.post("/api/user/password")
     def update_password(

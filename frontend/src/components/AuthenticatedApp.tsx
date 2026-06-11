@@ -162,6 +162,7 @@ export const AuthenticatedApp = () => {
           sessionToken={sessionToken}
           boardId={selectedBoardId}
           boardTitle={boardTitle}
+          username={storedUsername || undefined}
           onLogout={handleLogout}
           onSessionExpired={handleSessionExpired}
           onBackToBoards={() => {

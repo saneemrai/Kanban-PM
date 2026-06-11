@@ -23,7 +23,7 @@ FIXED_COLUMN_IDS = [
     "col-done",
 ]
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 VALID_PRIORITIES = {"low", "medium", "high", "critical"}
@@ -53,6 +53,13 @@ class BoardData(BaseModel):
 
     columns: list[Column]
     cards: dict[str, Card]
+
+
+class Comment(BaseModel):
+    id: int
+    author: str
+    body: str
+    created_at: str
 
 
 class BoardSummary(BaseModel):
@@ -197,6 +204,10 @@ def _run_migrations(connection: sqlite3.Connection) -> None:
         _migrate_to_v5(connection)
         connection.execute("UPDATE schema_version SET version = 5")
 
+    if version < 6:
+        _migrate_to_v6(connection)
+        connection.execute("UPDATE schema_version SET version = 6")
+
 
 def _migrate_to_v2(connection: sqlite3.Connection) -> None:
     connection.execute(
@@ -323,6 +334,23 @@ def _migrate_to_v4(connection: sqlite3.Connection) -> None:
     }
     if "due_date" not in card_cols:
         connection.execute("ALTER TABLE cards ADD COLUMN due_date TEXT")
+
+
+def _migrate_to_v6(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            board_id INTEGER NOT NULL,
+            card_id TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
+            body TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (board_id) REFERENCES boards (id),
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+        """
+    )
 
 
 def _migrate_to_v5(connection: sqlite3.Connection) -> None:
@@ -815,3 +843,92 @@ def parse_and_validate_board(payload: dict[str, Any]) -> BoardData:
                 )
 
     return board
+
+
+def list_card_comments(
+    db_path: Path, username: str, board_id: int, card_id: str
+) -> list[Comment]:
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        rows = connection.execute(
+            """
+            SELECT c.id, u.username AS author, c.body, c.created_at
+            FROM comments c
+            JOIN users u ON u.id = c.user_id
+            WHERE c.board_id = ? AND c.card_id = ?
+            ORDER BY c.created_at ASC
+            """,
+            (board_id, card_id),
+        ).fetchall()
+    return [
+        Comment(
+            id=row["id"],
+            author=row["author"],
+            body=row["body"],
+            created_at=row["created_at"],
+        )
+        for row in rows
+    ]
+
+
+def add_card_comment(
+    db_path: Path, username: str, board_id: int, card_id: str, body: str
+) -> Comment:
+    body = body.strip()
+    if not body:
+        raise HTTPException(status_code=422, detail="Comment body is required.")
+    if len(body) > 2000:
+        raise HTTPException(
+            status_code=422, detail="Comment must be 2000 characters or fewer."
+        )
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        card_exists = connection.execute(
+            "SELECT 1 FROM cards WHERE board_id = ? AND id = ?", (board_id, card_id)
+        ).fetchone()
+        if card_exists is None:
+            raise HTTPException(status_code=404, detail="Card not found.")
+        user_id = connection.execute(
+            "SELECT id FROM users WHERE username = ?", (username,)
+        ).fetchone()["id"]
+        connection.execute(
+            "INSERT INTO comments (board_id, card_id, user_id, body) VALUES (?, ?, ?, ?)",
+            (board_id, card_id, user_id, body),
+        )
+        row = connection.execute(
+            """
+            SELECT c.id, u.username AS author, c.body, c.created_at
+            FROM comments c
+            JOIN users u ON u.id = c.user_id
+            WHERE c.id = last_insert_rowid()
+            """
+        ).fetchone()
+    return Comment(
+        id=row["id"],
+        author=row["author"],
+        body=row["body"],
+        created_at=row["created_at"],
+    )
+
+
+def delete_card_comment(
+    db_path: Path, username: str, board_id: int, comment_id: int
+) -> None:
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        row = connection.execute(
+            """
+            SELECT c.id, u.username AS author
+            FROM comments c
+            JOIN users u ON u.id = c.user_id
+            WHERE c.id = ? AND c.board_id = ?
+            """,
+            (comment_id, board_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Comment not found.")
+        if row["author"] != username:
+            raise HTTPException(
+                status_code=403, detail="You can only delete your own comments."
+            )
+        connection.execute("DELETE FROM comments WHERE id = ?", (comment_id,))

@@ -179,6 +179,52 @@ export const saveBoard = async (
   return parseResponse(response);
 };
 
+export type Comment = {
+  id: number;
+  author: string;
+  body: string;
+  created_at: string;
+};
+
+export const listComments = async (
+  sessionToken: string,
+  boardId: number,
+  cardId: string
+): Promise<Comment[]> => {
+  const response = await fetch(`/api/boards/${boardId}/cards/${cardId}/comments`, {
+    headers: sessionHeaders(sessionToken),
+  });
+  return parseResponse(response);
+};
+
+export const addComment = async (
+  sessionToken: string,
+  boardId: number,
+  cardId: string,
+  body: string
+): Promise<Comment> => {
+  const response = await fetch(`/api/boards/${boardId}/cards/${cardId}/comments`, {
+    method: "POST",
+    headers: { ...sessionHeaders(sessionToken), "Content-Type": "application/json" },
+    body: JSON.stringify({ body }),
+  });
+  return parseResponse(response);
+};
+
+export const deleteComment = async (
+  sessionToken: string,
+  boardId: number,
+  commentId: number
+): Promise<void> => {
+  const response = await fetch(`/api/boards/${boardId}/comments/${commentId}`, {
+    method: "DELETE",
+    headers: sessionHeaders(sessionToken),
+  });
+  if (!response.ok) {
+    throw new ApiError(`Request failed with status ${response.status}`, response.status);
+  }
+};
+
 export const sendAiChatMessage = async (
   sessionToken: string,
   boardId: number,

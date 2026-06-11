@@ -36,6 +36,7 @@ import {
   initialData,
   matchesFilter,
   moveCard,
+  sortCards,
   type BoardData,
   type Card,
 } from "@/lib/kanban";
@@ -44,6 +45,7 @@ type KanbanBoardProps = {
   sessionToken: string;
   boardId: number;
   boardTitle: string;
+  username?: string;
   onLogout: () => void;
   onSessionExpired: () => void;
   onBackToBoards: () => void;
@@ -59,6 +61,7 @@ export const KanbanBoard = ({
   sessionToken,
   boardId,
   boardTitle,
+  username,
   onLogout,
   onSessionExpired,
   onBackToBoards,
@@ -403,12 +406,13 @@ export const KanbanBoard = ({
               type="button"
               onClick={() => setIsChangingPassword(true)}
               aria-label="Change password"
-              className="rounded-full border border-[var(--stroke)] p-2 text-[var(--gray-text)] transition hover:bg-[var(--surface)]"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--stroke)] px-3 py-2 text-xs font-medium text-[var(--gray-text)] transition hover:bg-[var(--surface)]"
             >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
                 <circle cx="7" cy="5.5" r="3" stroke="currentColor" strokeWidth="1.3"/>
                 <path d="M1.5 12.5c0-2.5 2.5-4 5.5-4s5.5 1.5 5.5 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
               </svg>
+              {username ? <span className="max-w-[80px] truncate">{username}</span> : null}
             </button>
             <button
               type="button"
@@ -437,9 +441,10 @@ export const KanbanBoard = ({
             <section className="grid grid-cols-5 gap-4 min-w-[960px]">
               {board.columns.map((column) => {
                 const allCards = column.cardIds.map((cardId) => board.cards[cardId]).filter(Boolean);
-                const visibleCards = filteredCardIds
+                const filtered = filteredCardIds
                   ? allCards.filter((card) => filteredCardIds.has(card.id))
                   : allCards;
+                const visibleCards = sortCards(filtered, filter.sortBy);
                 return (
                   <KanbanColumn
                     key={column.id}
@@ -467,6 +472,9 @@ export const KanbanBoard = ({
         {editingCardId && board.cards[editingCardId] ? (
           <CardDetailModal
             card={board.cards[editingCardId]}
+            sessionToken={sessionToken}
+            boardId={boardId}
+            username={username}
             onSave={handleSaveCard}
             onClose={() => setEditingCardId(null)}
           />

@@ -888,3 +888,160 @@ def test_change_password_requires_session(tmp_path: Path) -> None:
     )
 
     assert response.status_code == 401
+
+
+# --- Comment tests ---
+
+def _board_and_card(client: TestClient, headers: dict) -> tuple[int, str]:
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    card_id = "card-1"
+    return board_id, card_id
+
+
+def test_comments_list_empty_initially(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+
+    response = client.get(
+        f"/api/boards/{board_id}/cards/{card_id}/comments", headers=headers
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_add_comment_returns_comment(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+
+    response = client.post(
+        f"/api/boards/{board_id}/cards/{card_id}/comments",
+        json={"body": "Great progress!"},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["body"] == "Great progress!"
+    assert data["author"] == "user"
+    assert "id" in data
+    assert "created_at" in data
+
+
+def test_comments_list_shows_added_comment(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+    client.post(
+        f"/api/boards/{board_id}/cards/{card_id}/comments",
+        json={"body": "First"},
+        headers=headers,
+    )
+    client.post(
+        f"/api/boards/{board_id}/cards/{card_id}/comments",
+        json={"body": "Second"},
+        headers=headers,
+    )
+
+    comments = client.get(
+        f"/api/boards/{board_id}/cards/{card_id}/comments", headers=headers
+    ).json()
+
+    assert len(comments) == 2
+    assert comments[0]["body"] == "First"
+    assert comments[1]["body"] == "Second"
+
+
+def test_add_comment_rejects_empty_body(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+
+    response = client.post(
+        f"/api/boards/{board_id}/cards/{card_id}/comments",
+        json={"body": "   "},
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_add_comment_rejects_body_over_2000_chars(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+
+    response = client.post(
+        f"/api/boards/{board_id}/cards/{card_id}/comments",
+        json={"body": "x" * 2001},
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_add_comment_rejects_nonexistent_card(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    response = client.post(
+        f"/api/boards/{board_id}/cards/no-such-card/comments",
+        json={"body": "Hello"},
+        headers=headers,
+    )
+
+    assert response.status_code == 404
+
+
+def test_delete_comment_removes_it(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+    comment_id = client.post(
+        f"/api/boards/{board_id}/cards/{card_id}/comments",
+        json={"body": "Delete me"},
+        headers=headers,
+    ).json()["id"]
+
+    response = client.delete(
+        f"/api/boards/{board_id}/comments/{comment_id}", headers=headers
+    )
+    remaining = client.get(
+        f"/api/boards/{board_id}/cards/{card_id}/comments", headers=headers
+    ).json()
+
+    assert response.status_code == 204
+    assert remaining == []
+
+
+def test_delete_comment_forbidden_for_other_user(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    user_headers = login(client)
+    alice_headers = _register_and_headers(client)
+    board_id, card_id = _board_and_card(client, user_headers)
+    comment_id = client.post(
+        f"/api/boards/{board_id}/cards/{card_id}/comments",
+        json={"body": "Only mine"},
+        headers=user_headers,
+    ).json()["id"]
+
+    alice_board_id = client.get("/api/boards", headers=alice_headers).json()[0]["id"]
+    response = client.delete(
+        f"/api/boards/{alice_board_id}/comments/{comment_id}", headers=alice_headers
+    )
+
+    assert response.status_code == 404
+
+
+def test_comments_require_session(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+
+    assert client.get(f"/api/boards/{board_id}/cards/{card_id}/comments").status_code == 401
+    assert client.post(
+        f"/api/boards/{board_id}/cards/{card_id}/comments", json={"body": "x"}
+    ).status_code == 401

@@ -14,11 +14,25 @@ const defaultProps = {
 
 const mockBoardFetch = (board: BoardData = initialData) => {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    if (String(input).includes("/data") && init?.method === "PUT") {
+    const url = String(input);
+    if (url.includes("/data") && init?.method === "PUT") {
       return Response.json(JSON.parse(init.body as string) as BoardData);
     }
-    if (String(input).includes("/data")) {
+    if (url.includes("/data")) {
       return Response.json(board);
+    }
+    if (url.includes("/comments") && init?.method === "POST") {
+      const body = JSON.parse(init.body as string);
+      return new Response(
+        JSON.stringify({ id: 1, author: "user", body: body.body, created_at: new Date().toISOString() }),
+        { status: 201, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("/comments") && init?.method === "DELETE") {
+      return new Response(null, { status: 204 });
+    }
+    if (url.includes("/comments")) {
+      return Response.json([]);
     }
     return Response.json(board);
   });
@@ -330,5 +344,20 @@ describe("KanbanBoard", () => {
     const stats = screen.getByRole("region", { name: /board statistics/i });
     expect(stats).toBeInTheDocument();
     expect(within(stats).getByText("8")).toBeInTheDocument();
+  });
+
+  it("shows comments section in card modal and posts a comment", async () => {
+    mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} username="user" />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getAllByRole("button", { name: /edit /i })[0]);
+    expect(screen.getByRole("region", { name: /comments/i })).toBeInTheDocument();
+    expect(screen.getByText("No comments yet.")).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText("Add a comment"), "Looks great!");
+    await userEvent.click(screen.getByRole("button", { name: "Post comment" }));
+
+    expect(await screen.findByText("Looks great!")).toBeInTheDocument();
   });
 });

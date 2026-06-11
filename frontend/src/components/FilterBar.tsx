@@ -1,6 +1,6 @@
 "use client";
 
-import type { Priority } from "@/lib/kanban";
+import type { Priority, SortMode } from "@/lib/kanban";
 
 export type PriorityFilter = Priority | "all";
 export type DueDateFilter = "all" | "overdue" | "today" | "upcoming" | "none";
@@ -10,6 +10,7 @@ export type FilterState = {
   priority: PriorityFilter;
   dueDate: DueDateFilter;
   label: string;
+  sortBy: SortMode;
 };
 
 export const defaultFilter: FilterState = {
@@ -17,6 +18,7 @@ export const defaultFilter: FilterState = {
   priority: "all",
   dueDate: "all",
   label: "",
+  sortBy: "default",
 };
 
 export const isFilterActive = (f: FilterState) =>
@@ -114,10 +116,24 @@ export const FilterBar = ({ filter, onChange }: FilterBarProps) => {
         className="rounded-full border border-[var(--stroke)] py-1.5 px-3 text-xs font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)] w-28"
       />
 
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--gray-text)] ml-1">Sort</span>
+      <select
+        value={filter.sortBy}
+        onChange={(e) => onChange({ ...filter, sortBy: e.target.value as SortMode })}
+        aria-label="Sort cards"
+        className="rounded-full border border-[var(--stroke)] bg-white py-1 pl-2.5 pr-6 text-[10px] font-bold uppercase tracking-wide text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)] appearance-none cursor-pointer"
+        style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center" }}
+      >
+        <option value="default">Manual</option>
+        <option value="title">Title</option>
+        <option value="priority">Priority</option>
+        <option value="due_date">Due date</option>
+      </select>
+
       {active ? (
         <button
           type="button"
-          onClick={() => onChange(defaultFilter)}
+          onClick={() => onChange({ ...defaultFilter, sortBy: filter.sortBy })}
           aria-label="Clear filters"
           className="ml-auto rounded-full border border-[var(--stroke)] px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-[var(--gray-text)] transition hover:bg-[var(--surface)]"
         >
