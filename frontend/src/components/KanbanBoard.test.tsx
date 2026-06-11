@@ -701,6 +701,17 @@ describe("KanbanBoard", () => {
     expect(within(backlogColumn).queryByText("Align roadmap themes")).not.toBeInTheDocument();
   });
 
+  it("shows keyboard shortcuts overlay when ? button is clicked", async () => {
+    mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getByRole("button", { name: /keyboard shortcuts/i }));
+
+    expect(await screen.findByRole("dialog", { name: /keyboard shortcuts/i })).toBeVisible();
+    expect(screen.getByText("Focus search / filter bar")).toBeInTheDocument();
+  });
+
   it("opens board statistics drawer from header button", async () => {
     mockBoardFetch();
     render(<KanbanBoard {...defaultProps} />);

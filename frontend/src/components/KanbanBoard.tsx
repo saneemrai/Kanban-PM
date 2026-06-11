@@ -32,6 +32,7 @@ import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 import { FilterBar, defaultFilter, isFilterActive, type FilterState } from "@/components/FilterBar";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
+import { KeyboardShortcutsOverlay } from "@/components/KeyboardShortcutsOverlay";
 import { LabelsDrawer } from "@/components/LabelsDrawer";
 import { ApiError, archiveCard, fetchBoard, listBoardLabels, updateBoardMeta, saveBoard, type BoardLabel } from "@/lib/api";
 import {
@@ -86,6 +87,7 @@ export const KanbanBoard = ({
   const [isActivityOpen, setIsActivityOpen] = useState(false);
   const [isLabelsOpen, setIsLabelsOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [boardLabels, setBoardLabels] = useState<BoardLabel[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [titleDraft, setTitleDraft] = useState(boardTitle);
@@ -154,10 +156,32 @@ export const KanbanBoard = ({
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       const inInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
-      if (e.key === "/" && !inInput && !e.ctrlKey && !e.metaKey) {
+      const noMod = !e.ctrlKey && !e.metaKey && !e.altKey;
+      if (e.key === "/" && !inInput && noMod) {
         e.preventDefault();
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
+      }
+      if (e.key === "?" && !inInput && noMod) {
+        e.preventDefault();
+        setIsShortcutsOpen((prev) => !prev);
+      }
+      if (e.key === "n" && !inInput && noMod) {
+        e.preventDefault();
+        const btn = document.querySelector<HTMLButtonElement>("[data-add-card-btn]");
+        btn?.click();
+      }
+      if (e.key === "a" && !inInput && noMod) {
+        e.preventDefault();
+        setIsActivityOpen((prev) => !prev);
+      }
+      if (e.key === "s" && !inInput && noMod) {
+        e.preventDefault();
+        setIsStatsOpen((prev) => !prev);
+      }
+      if (e.key === "l" && !inInput && noMod) {
+        e.preventDefault();
+        setIsLabelsOpen((prev) => !prev);
       }
     };
     document.addEventListener("keydown", handler);
@@ -612,6 +636,14 @@ export const KanbanBoard = ({
             </button>
             <button
               type="button"
+              onClick={() => setIsShortcutsOpen(true)}
+              aria-label="Keyboard shortcuts"
+              className="inline-flex items-center justify-center rounded-full border border-[var(--stroke)] h-8 w-8 text-xs font-bold text-[var(--gray-text)] transition hover:bg-[var(--surface)]"
+            >
+              ?
+            </button>
+            <button
+              type="button"
               onClick={() => setIsChatOpen(true)}
               className="inline-flex items-center gap-2 rounded-full bg-[var(--primary-blue)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:brightness-110"
             >
@@ -729,6 +761,10 @@ export const KanbanBoard = ({
             boardId={boardId}
             onClose={() => setIsStatsOpen(false)}
           />
+        ) : null}
+
+        {isShortcutsOpen ? (
+          <KeyboardShortcutsOverlay onClose={() => setIsShortcutsOpen(false)} />
         ) : null}
 
         {isActivityOpen ? (
