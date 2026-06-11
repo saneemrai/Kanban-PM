@@ -94,7 +94,8 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
         if not title:
             raise HTTPException(status_code=422, detail="Board title is required.")
         template = payload.get("template", "default")
-        return create_board(app.state.db_path, username, title, template)
+        description = payload.get("description", "")
+        return create_board(app.state.db_path, username, title, template, description)
 
     @app.patch("/api/boards/{board_id}")
     def update_board_meta(
@@ -106,7 +107,8 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
         title = payload.get("title", "").strip()
         if not title:
             raise HTTPException(status_code=422, detail="Board title is required.")
-        rename_board(app.state.db_path, username, board_id, title)
+        description = payload.get("description", None)
+        rename_board(app.state.db_path, username, board_id, title, description)
         return {"status": "ok"}
 
     @app.delete("/api/boards/{board_id}", status_code=204)

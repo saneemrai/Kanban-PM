@@ -28,6 +28,7 @@ export type AiChatResponse = {
 export type BoardSummary = {
   id: number;
   title: string;
+  description: string;
   cardCount: number;
   updatedAt: string;
 };
@@ -119,7 +120,8 @@ export const BOARD_TEMPLATES: { value: BoardTemplate; label: string; description
 export const createBoard = async (
   sessionToken: string,
   title: string,
-  template: BoardTemplate = "default"
+  template: BoardTemplate = "default",
+  description = ""
 ): Promise<BoardSummary> => {
   const response = await fetch("/api/boards", {
     method: "POST",
@@ -127,15 +129,16 @@ export const createBoard = async (
       ...sessionHeaders(sessionToken),
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ title, template }),
+    body: JSON.stringify({ title, template, description }),
   });
   return parseResponse(response);
 };
 
-export const renameBoard = async (
+export const updateBoardMeta = async (
   sessionToken: string,
   boardId: number,
-  title: string
+  title: string,
+  description: string
 ): Promise<void> => {
   const response = await fetch(`/api/boards/${boardId}`, {
     method: "PATCH",
@@ -143,12 +146,18 @@ export const renameBoard = async (
       ...sessionHeaders(sessionToken),
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ title }),
+    body: JSON.stringify({ title, description }),
   });
   if (!response.ok) {
     throw new ApiError(`Request failed with status ${response.status}`, response.status);
   }
 };
+
+export const renameBoard = async (
+  sessionToken: string,
+  boardId: number,
+  title: string
+): Promise<void> => updateBoardMeta(sessionToken, boardId, title, "");
 
 export const deleteBoard = async (
   sessionToken: string,

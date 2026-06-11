@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { ApiError, BOARD_TEMPLATES, createBoard, deleteBoard, type BoardSummary, type BoardTemplate } from "@/lib/api";
+import { ApiError, BOARD_TEMPLATES, createBoard, deleteBoard, updateBoardMeta, type BoardSummary, type BoardTemplate } from "@/lib/api";
 
 type BoardSelectorProps = {
   sessionToken: string;
@@ -13,6 +13,8 @@ type BoardSelectorProps = {
   onLogout: () => void;
 };
 
+type EditState = { title: string; description: string };
+
 export const BoardSelector = ({
   sessionToken,
   username,
@@ -23,10 +25,14 @@ export const BoardSelector = ({
   onLogout,
 }: BoardSelectorProps) => {
   const [newBoardTitle, setNewBoardTitle] = useState("");
+  const [newBoardDescription, setNewBoardDescription] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState<BoardTemplate>("default");
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editState, setEditState] = useState<EditState>({ title: "", description: "" });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -36,9 +42,10 @@ export const BoardSelector = ({
     setIsCreating(true);
     setCreateError("");
     try {
-      const created = await createBoard(sessionToken, title, selectedTemplate);
+      const created = await createBoard(sessionToken, title, selectedTemplate, newBoardDescription.trim());
       onBoardsChanged([...boards, created]);
       setNewBoardTitle("");
+      setNewBoardDescription("");
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         onSessionExpired();
@@ -63,6 +70,37 @@ export const BoardSelector = ({
       }
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const startEdit = (board: BoardSummary) => {
+    setEditingId(board.id);
+    setEditState({ title: board.title, description: board.description });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const handleSaveEdit = async (boardId: number) => {
+    const title = editState.title.trim();
+    if (!title || isSavingEdit) return;
+    setIsSavingEdit(true);
+    try {
+      await updateBoardMeta(sessionToken, boardId, title, editState.description.trim());
+      onBoardsChanged(
+        boards.map((b) =>
+          b.id === boardId ? { ...b, title, description: editState.description.trim() } : b
+        )
+      );
+      setEditingId(null);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        onSessionExpired();
+        return;
+      }
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -102,39 +140,99 @@ export const BoardSelector = ({
               key={board.id}
               className="group relative flex flex-col gap-4 rounded-2xl border border-[var(--stroke)] bg-white p-6 shadow-[var(--shadow)] transition hover:border-[var(--primary-blue)]"
             >
-              <div className="flex items-start justify-between gap-2">
-                <h2 className="font-display text-lg font-semibold text-[var(--navy-dark)] leading-tight">
-                  {board.title}
-                </h2>
-                {boards.length > 1 ? (
+              {editingId === board.id ? (
+                <div className="flex flex-col gap-3">
+                  <input
+                    value={editState.title}
+                    onChange={(e) => setEditState((s) => ({ ...s, title: e.target.value }))}
+                    maxLength={80}
+                    aria-label="Board title"
+                    autoFocus
+                    className="w-full border border-[var(--stroke)] px-3 py-2 text-sm font-semibold text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+                  />
+                  <textarea
+                    value={editState.description}
+                    onChange={(e) => setEditState((s) => ({ ...s, description: e.target.value }))}
+                    maxLength={300}
+                    rows={2}
+                    placeholder="Board description (optional)"
+                    aria-label="Board description"
+                    className="w-full resize-none border border-[var(--stroke)] px-3 py-2 text-xs text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSaveEdit(board.id)}
+                      disabled={isSavingEdit || !editState.title.trim()}
+                      className="flex-1 rounded-full bg-[var(--secondary-purple)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:brightness-110 disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelEdit}
+                      className="rounded-full border border-[var(--stroke)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)] transition hover:bg-[var(--surface)]"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h2 className="font-display text-lg font-semibold text-[var(--navy-dark)] leading-tight">
+                        {board.title}
+                      </h2>
+                      {board.description ? (
+                        <p className="mt-1 text-xs text-[var(--gray-text)] line-clamp-2">
+                          {board.description}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => startEdit(board)}
+                        aria-label={`Edit ${board.title}`}
+                        className="rounded-lg p-1.5 text-[var(--gray-text)] opacity-0 transition hover:bg-[var(--surface)] hover:text-[var(--primary-blue)] group-hover:opacity-100"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                          <path d="M9.5 2.5l2 2L4 12H2v-2L9.5 2.5z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                      {boards.length > 1 ? (
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(board.id)}
+                          disabled={deletingId === board.id}
+                          aria-label={`Delete ${board.title}`}
+                          className="rounded-lg p-1.5 text-[var(--gray-text)] opacity-0 transition hover:bg-[var(--surface)] hover:text-[var(--secondary-purple)] group-hover:opacity-100 disabled:opacity-40"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                            <path d="M2 4h10M5 4V2.5A.5.5 0 0 1 5.5 2h3a.5.5 0 0 1 .5.5V4M6 7v4M8 7v4M3 4l.7 7.3A.7.7 0 0 0 4.4 12h5.2a.7.7 0 0 0 .7-.7L11 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-yellow)]" />
+                    <span className="text-xs font-medium text-[var(--gray-text)]">
+                      {board.cardCount} {board.cardCount === 1 ? "card" : "cards"}
+                    </span>
+                  </div>
+
                   <button
                     type="button"
-                    onClick={() => handleDelete(board.id)}
-                    disabled={deletingId === board.id}
-                    aria-label={`Delete ${board.title}`}
-                    className="shrink-0 rounded-lg p-1.5 text-[var(--gray-text)] opacity-0 transition hover:bg-[var(--surface)] hover:text-[var(--secondary-purple)] group-hover:opacity-100 disabled:opacity-40"
+                    onClick={() => onSelectBoard(board.id)}
+                    className="mt-auto w-full rounded-full bg-[var(--primary-blue)] px-4 py-2.5 text-sm font-semibold uppercase tracking-wide text-white transition hover:brightness-110"
                   >
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                      <path d="M2 4h10M5 4V2.5A.5.5 0 0 1 5.5 2h3a.5.5 0 0 1 .5.5V4M6 7v4M8 7v4M3 4l.7 7.3A.7.7 0 0 0 4.4 12h5.2a.7.7 0 0 0 .7-.7L11 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
+                    Open board
                   </button>
-                ) : null}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-yellow)]" />
-                <span className="text-xs font-medium text-[var(--gray-text)]">
-                  {board.cardCount} {board.cardCount === 1 ? "card" : "cards"}
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => onSelectBoard(board.id)}
-                className="mt-auto w-full rounded-full bg-[var(--primary-blue)] px-4 py-2.5 text-sm font-semibold uppercase tracking-wide text-white transition hover:brightness-110"
-              >
-                Open board
-              </button>
+                </>
+              )}
             </div>
           ))}
 
@@ -148,7 +246,17 @@ export const BoardSelector = ({
                 onChange={(e) => setNewBoardTitle(e.target.value)}
                 placeholder="Board title"
                 maxLength={80}
+                aria-label="New board title"
                 className="w-full border border-[var(--stroke)] px-3 py-2.5 text-sm font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+              />
+              <textarea
+                value={newBoardDescription}
+                onChange={(e) => setNewBoardDescription(e.target.value)}
+                placeholder="Description (optional)"
+                maxLength={300}
+                rows={2}
+                aria-label="New board description"
+                className="w-full resize-none border border-[var(--stroke)] px-3 py-2 text-xs text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
               />
               <p className="text-xs font-semibold text-[var(--gray-text)] mt-1">Template</p>
               <div className="grid grid-cols-1 gap-2">

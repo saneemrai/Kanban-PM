@@ -156,12 +156,15 @@ export const AuthenticatedApp = () => {
     }
 
     if (selectedBoardId !== null) {
-      const boardTitle = boards.find((b) => b.id === selectedBoardId)?.title ?? "Board";
+      const selectedBoard = boards.find((b) => b.id === selectedBoardId);
+      const boardTitle = selectedBoard?.title ?? "Board";
+      const boardDescription = selectedBoard?.description ?? "";
       return (
         <KanbanBoard
           sessionToken={sessionToken}
           boardId={selectedBoardId}
           boardTitle={boardTitle}
+          boardDescription={boardDescription}
           username={storedUsername || undefined}
           onLogout={handleLogout}
           onSessionExpired={handleSessionExpired}

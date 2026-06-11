@@ -1706,3 +1706,87 @@ def test_invalid_template_returns_422(tmp_path: Path) -> None:
 
     response = client.post("/api/boards", json={"title": "Bad Board", "template": "invalid_template"}, headers=headers)
     assert response.status_code == 422
+
+
+# --- Board description tests ---
+
+def test_board_description_defaults_to_empty(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+
+    boards = client.get("/api/boards", headers=headers).json()
+
+    assert boards[0]["description"] == ""
+
+
+def test_board_description_can_be_set_on_create(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+
+    response = client.post(
+        "/api/boards",
+        json={"title": "My Project", "description": "A team project board."},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    assert response.json()["description"] == "A team project board."
+
+
+def test_board_description_can_be_updated(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    response = client.patch(
+        f"/api/boards/{board_id}",
+        json={"title": "My Board", "description": "Updated description."},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    boards = client.get("/api/boards", headers=headers).json()
+    target = next(b for b in boards if b["id"] == board_id)
+    assert target["description"] == "Updated description."
+
+
+def test_board_description_can_be_cleared(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    client.patch(
+        f"/api/boards/{board_id}",
+        json={"title": "My Board", "description": "Some description"},
+        headers=headers,
+    )
+    client.patch(
+        f"/api/boards/{board_id}",
+        json={"title": "My Board", "description": ""},
+        headers=headers,
+    )
+
+    boards = client.get("/api/boards", headers=headers).json()
+    target = next(b for b in boards if b["id"] == board_id)
+    assert target["description"] == ""
+
+
+def test_board_description_unchanged_if_not_in_patch(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    client.patch(
+        f"/api/boards/{board_id}",
+        json={"title": "My Board", "description": "Keep me."},
+        headers=headers,
+    )
+    client.patch(
+        f"/api/boards/{board_id}",
+        json={"title": "Renamed"},
+        headers=headers,
+    )
+
+    boards = client.get("/api/boards", headers=headers).json()
+    target = next(b for b in boards if b["id"] == board_id)
+    assert target["description"] == "Keep me."

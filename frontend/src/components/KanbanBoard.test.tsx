@@ -523,6 +523,23 @@ describe("KanbanBoard", () => {
     expect(screen.getByRole("button", { name: /export board/i })).toBeInTheDocument();
   });
 
+  it("shows board description when provided as prop", async () => {
+    render(<KanbanBoard {...defaultProps} boardDescription="This is a test board." />);
+    await screen.findAllByTestId(/column-/i);
+
+    expect(screen.getByText("This is a test board.")).toBeInTheDocument();
+  });
+
+  it("reveals description input when rename board button is clicked", async () => {
+    render(<KanbanBoard {...defaultProps} boardDescription="Existing desc" />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getByRole("button", { name: /rename board/i }));
+
+    expect(screen.getByLabelText("Board description")).toBeInTheDocument();
+    expect(screen.getByLabelText("Board description")).toHaveValue("Existing desc");
+  });
+
   it("shows done percentage and done SP in board stats", async () => {
     const boardWithEstimates = {
       ...initialData,

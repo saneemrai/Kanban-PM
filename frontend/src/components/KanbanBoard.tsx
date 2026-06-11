@@ -31,7 +31,7 @@ import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 import { FilterBar, defaultFilter, isFilterActive, type FilterState } from "@/components/FilterBar";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
-import { ApiError, archiveCard, fetchBoard, renameBoard, saveBoard } from "@/lib/api";
+import { ApiError, archiveCard, fetchBoard, updateBoardMeta, saveBoard } from "@/lib/api";
 import {
   columnEndDropId,
   createId,
@@ -47,6 +47,7 @@ type KanbanBoardProps = {
   sessionToken: string;
   boardId: number;
   boardTitle: string;
+  boardDescription?: string;
   username?: string;
   onLogout: () => void;
   onSessionExpired: () => void;
@@ -63,6 +64,7 @@ export const KanbanBoard = ({
   sessionToken,
   boardId,
   boardTitle,
+  boardDescription = "",
   username,
   onLogout,
   onSessionExpired,
@@ -82,8 +84,10 @@ export const KanbanBoard = ({
   const [isActivityOpen, setIsActivityOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [titleDraft, setTitleDraft] = useState(boardTitle);
+  const [descriptionDraft, setDescriptionDraft] = useState(boardDescription);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const titleBeforeEdit = useRef(boardTitle);
+  const descriptionBeforeEdit = useRef(boardDescription);
   const saveRequestId = useRef(0);
   const dragStartY = useRef<number | null>(null);
   const renameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -273,16 +277,20 @@ export const KanbanBoard = ({
   const handleSaveTitle = async () => {
     setIsEditingTitle(false);
     const trimmed = titleDraft.trim();
+    const desc = descriptionDraft.trim();
     if (!trimmed) {
       setTitleDraft(titleBeforeEdit.current);
+      setDescriptionDraft(descriptionBeforeEdit.current);
       return;
     }
-    if (trimmed === titleBeforeEdit.current) return;
+    if (trimmed === titleBeforeEdit.current && desc === descriptionBeforeEdit.current) return;
     try {
-      await renameBoard(sessionToken, boardId, trimmed);
+      await updateBoardMeta(sessionToken, boardId, trimmed, desc);
       titleBeforeEdit.current = trimmed;
+      descriptionBeforeEdit.current = desc;
     } catch {
       setTitleDraft(titleBeforeEdit.current);
+      setDescriptionDraft(descriptionBeforeEdit.current);
       setSaveError("Could not rename board.");
     }
   };
@@ -424,40 +432,67 @@ export const KanbanBoard = ({
               Boards
             </button>
             {isEditingTitle ? (
-              <input
-                value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
-                onBlur={() => void handleSaveTitle()}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void handleSaveTitle();
-                  if (e.key === "Escape") {
-                    setTitleDraft(titleBeforeEdit.current);
-                    setIsEditingTitle(false);
-                  }
-                }}
-                className="font-display text-xl font-semibold text-[var(--navy-dark)] bg-transparent border-b-2 border-[var(--primary-blue)] outline-none min-w-0 max-w-xs"
-                aria-label="Board title"
-                autoFocus
-              />
-            ) : (
-              <>
-                <h1 className="font-display text-xl font-semibold text-[var(--navy-dark)] whitespace-nowrap truncate">
-                  {titleDraft}
-                </h1>
-                <button
-                  type="button"
-                  onClick={() => {
-                    titleBeforeEdit.current = titleDraft;
-                    setIsEditingTitle(true);
+              <div className="flex flex-col gap-1 min-w-0">
+                <input
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void handleSaveTitle();
+                    if (e.key === "Escape") {
+                      setTitleDraft(titleBeforeEdit.current);
+                      setDescriptionDraft(descriptionBeforeEdit.current);
+                      setIsEditingTitle(false);
+                    }
                   }}
-                  aria-label="Rename board"
-                  className="shrink-0 rounded-lg p-1 text-[var(--gray-text)] opacity-0 transition hover:bg-[var(--surface)] hover:opacity-100 focus:opacity-100"
-                >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                    <path d="M8.5 1.5a1.414 1.414 0 0 1 2 2L3.5 10.5l-3 .5.5-3 7.5-6.5z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-              </>
+                  className="font-display text-xl font-semibold text-[var(--navy-dark)] bg-transparent border-b-2 border-[var(--primary-blue)] outline-none min-w-0 max-w-xs"
+                  aria-label="Board title"
+                  autoFocus
+                />
+                <input
+                  value={descriptionDraft}
+                  onChange={(e) => setDescriptionDraft(e.target.value)}
+                  onBlur={() => void handleSaveTitle()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void handleSaveTitle();
+                    if (e.key === "Escape") {
+                      setTitleDraft(titleBeforeEdit.current);
+                      setDescriptionDraft(descriptionBeforeEdit.current);
+                      setIsEditingTitle(false);
+                    }
+                  }}
+                  placeholder="Board description (optional)"
+                  maxLength={300}
+                  className="text-xs text-[var(--gray-text)] bg-transparent border-b border-[var(--stroke)] outline-none min-w-0 max-w-xs focus:border-[var(--primary-blue)]"
+                  aria-label="Board description"
+                />
+              </div>
+            ) : (
+              <div className="min-w-0">
+                <div className="flex items-center gap-1">
+                  <h1 className="font-display text-xl font-semibold text-[var(--navy-dark)] whitespace-nowrap truncate">
+                    {titleDraft}
+                  </h1>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      titleBeforeEdit.current = titleDraft;
+                      descriptionBeforeEdit.current = descriptionDraft;
+                      setIsEditingTitle(true);
+                    }}
+                    aria-label="Rename board"
+                    className="shrink-0 rounded-lg p-1 text-[var(--gray-text)] opacity-0 transition hover:bg-[var(--surface)] hover:opacity-100 focus:opacity-100"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                      <path d="M8.5 1.5a1.414 1.414 0 0 1 2 2L3.5 10.5l-3 .5.5-3 7.5-6.5z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
+                {descriptionDraft ? (
+                  <p className="text-xs text-[var(--gray-text)] truncate max-w-xs mt-0.5">
+                    {descriptionDraft}
+                  </p>
+                ) : null}
+              </div>
             )}
             {saveState !== "idle" ? (
               <div

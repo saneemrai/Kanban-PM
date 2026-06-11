@@ -23,7 +23,7 @@ FIXED_COLUMN_IDS = [
     "col-done",
 ]
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 
 VALID_PRIORITIES = {"low", "medium", "high", "critical"}
@@ -70,6 +70,7 @@ class Comment(BaseModel):
 class BoardSummary(BaseModel):
     id: int
     title: str
+    description: str
     cardCount: int
     updatedAt: str
 
@@ -275,6 +276,10 @@ def _run_migrations(connection: sqlite3.Connection) -> None:
         _migrate_to_v13(connection)
         connection.execute("UPDATE schema_version SET version = 13")
 
+    if version < 14:
+        _migrate_to_v14(connection)
+        connection.execute("UPDATE schema_version SET version = 14")
+
 
 def _migrate_to_v2(connection: sqlite3.Connection) -> None:
     connection.execute(
@@ -401,6 +406,17 @@ def _migrate_to_v4(connection: sqlite3.Connection) -> None:
     }
     if "due_date" not in card_cols:
         connection.execute("ALTER TABLE cards ADD COLUMN due_date TEXT")
+
+
+def _migrate_to_v14(connection: sqlite3.Connection) -> None:
+    board_cols = {
+        r["name"]
+        for r in connection.execute("PRAGMA table_info(boards)").fetchall()
+    }
+    if "description" not in board_cols:
+        connection.execute(
+            "ALTER TABLE boards ADD COLUMN description TEXT NOT NULL DEFAULT ''"
+        )
 
 
 def _migrate_to_v13(connection: sqlite3.Connection) -> None:
@@ -575,11 +591,11 @@ def _ensure_default_user(connection: sqlite3.Connection) -> None:
 
 
 def _create_board_with_seed_data(
-    connection: sqlite3.Connection, user_id: int, title: str, template: str = "default"
+    connection: sqlite3.Connection, user_id: int, title: str, template: str = "default", description: str = ""
 ) -> int:
     connection.execute(
-        "INSERT INTO boards (user_id, title) VALUES (?, ?)",
-        (user_id, title),
+        "INSERT INTO boards (user_id, title, description) VALUES (?, ?, ?)",
+        (user_id, title, description),
     )
     board_id = connection.execute(
         "SELECT id FROM boards WHERE user_id = ? ORDER BY id DESC LIMIT 1",
@@ -703,7 +719,7 @@ def list_boards(db_path: Path, username: str) -> list[BoardSummary]:
     with connect(db_path) as connection:
         rows = connection.execute(
             """
-            SELECT b.id, b.title, b.updated_at,
+            SELECT b.id, b.title, b.description, b.updated_at,
                    COUNT(c.id) AS card_count
             FROM boards b
             JOIN users u ON u.id = b.user_id
@@ -718,6 +734,7 @@ def list_boards(db_path: Path, username: str) -> list[BoardSummary]:
         BoardSummary(
             id=row["id"],
             title=row["title"],
+            description=row["description"] or "",
             cardCount=row["card_count"],
             updatedAt=row["updated_at"],
         )
@@ -725,7 +742,7 @@ def list_boards(db_path: Path, username: str) -> list[BoardSummary]:
     ]
 
 
-def create_board(db_path: Path, username: str, title: str, template: str = "default") -> BoardSummary:
+def create_board(db_path: Path, username: str, title: str, template: str = "default", description: str = "") -> BoardSummary:
     title = title.strip()
     if not title:
         raise HTTPException(status_code=422, detail="Board title is required.")
@@ -738,10 +755,10 @@ def create_board(db_path: Path, username: str, title: str, template: str = "defa
         if row is None:
             raise HTTPException(status_code=404, detail="User not found.")
         user_id = row["id"]
-        board_id = _create_board_with_seed_data(connection, user_id, title, template)
+        board_id = _create_board_with_seed_data(connection, user_id, title, template, description)
         row = connection.execute(
             """
-            SELECT b.id, b.title, b.updated_at, COUNT(c.id) AS card_count
+            SELECT b.id, b.title, b.description, b.updated_at, COUNT(c.id) AS card_count
             FROM boards b
             LEFT JOIN cards c ON c.board_id = b.id
             WHERE b.id = ?
@@ -752,12 +769,13 @@ def create_board(db_path: Path, username: str, title: str, template: str = "defa
     return BoardSummary(
         id=row["id"],
         title=row["title"],
+        description=row["description"] or "",
         cardCount=row["card_count"],
         updatedAt=row["updated_at"],
     )
 
 
-def rename_board(db_path: Path, username: str, board_id: int, title: str) -> None:
+def rename_board(db_path: Path, username: str, board_id: int, title: str, description: str | None = None) -> None:
     title = title.strip()
     if not title:
         raise HTTPException(status_code=422, detail="Board title is required.")
@@ -766,10 +784,16 @@ def rename_board(db_path: Path, username: str, board_id: int, title: str) -> Non
         old_title = connection.execute(
             "SELECT title FROM boards WHERE id = ?", (board_id,)
         ).fetchone()["title"]
-        connection.execute(
-            "UPDATE boards SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (title, board_id),
-        )
+        if description is None:
+            connection.execute(
+                "UPDATE boards SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (title, board_id),
+            )
+        else:
+            connection.execute(
+                "UPDATE boards SET title = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (title, description, board_id),
+            )
         _log_activity(
             connection, board_id, username, "board_renamed",
             meta={"from": old_title, "to": title}
