@@ -51,9 +51,10 @@ type KanbanCardProps = {
   card: Card;
   onDelete: (cardId: string) => void;
   onEdit: (cardId: string) => void;
+  onArchive?: (cardId: string) => void;
 };
 
-export const KanbanCard = ({ card, onDelete, onEdit }: KanbanCardProps) => {
+export const KanbanCard = ({ card, onDelete, onEdit, onArchive }: KanbanCardProps) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: card.id });
 
@@ -131,6 +132,20 @@ export const KanbanCard = ({ card, onDelete, onEdit }: KanbanCardProps) => {
               <path d="M8.5 1.5a1.414 1.414 0 0 1 2 2L3.5 10.5l-3 .5.5-3 7.5-6.5z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
+          {onArchive ? (
+            <button
+              type="button"
+              onClick={() => onArchive(card.id)}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="rounded-lg p-1.5 text-[var(--gray-text)] opacity-0 transition-all hover:bg-[rgba(236,173,10,0.12)] hover:text-[#a07800] group-hover:opacity-100"
+              aria-label={`Archive ${card.title}`}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <rect x="1" y="2" width="10" height="8" rx="1" stroke="currentColor" strokeWidth="1.4"/>
+                <path d="M1 5h10M4 7.5h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => onDelete(card.id)}

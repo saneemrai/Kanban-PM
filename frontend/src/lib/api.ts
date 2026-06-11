@@ -179,6 +179,49 @@ export const saveBoard = async (
   return parseResponse(response);
 };
 
+export type ArchivedCard = {
+  id: string;
+  title: string;
+  details: string;
+  priority: string | null;
+  due_date: string | null;
+  labels: string[];
+};
+
+export const listArchivedCards = async (
+  sessionToken: string,
+  boardId: number
+): Promise<ArchivedCard[]> => {
+  const response = await fetch(`/api/boards/${boardId}/archive`, {
+    headers: sessionHeaders(sessionToken),
+  });
+  return parseResponse(response);
+};
+
+export const archiveCard = async (
+  sessionToken: string,
+  boardId: number,
+  cardId: string
+): Promise<import("@/lib/kanban").BoardData> => {
+  const response = await fetch(`/api/boards/${boardId}/cards/${cardId}/archive`, {
+    method: "POST",
+    headers: sessionHeaders(sessionToken),
+  });
+  return parseResponse(response);
+};
+
+export const restoreCard = async (
+  sessionToken: string,
+  boardId: number,
+  cardId: string
+): Promise<import("@/lib/kanban").BoardData> => {
+  const response = await fetch(`/api/boards/${boardId}/cards/${cardId}/restore`, {
+    method: "POST",
+    headers: sessionHeaders(sessionToken),
+  });
+  return parseResponse(response);
+};
+
 export type Comment = {
   id: number;
   author: string;

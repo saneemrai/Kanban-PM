@@ -23,7 +23,7 @@ FIXED_COLUMN_IDS = [
     "col-done",
 ]
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 VALID_PRIORITIES = {"low", "medium", "high", "critical"}
@@ -208,6 +208,10 @@ def _run_migrations(connection: sqlite3.Connection) -> None:
         _migrate_to_v6(connection)
         connection.execute("UPDATE schema_version SET version = 6")
 
+    if version < 7:
+        _migrate_to_v7(connection)
+        connection.execute("UPDATE schema_version SET version = 7")
+
 
 def _migrate_to_v2(connection: sqlite3.Connection) -> None:
     connection.execute(
@@ -334,6 +338,17 @@ def _migrate_to_v4(connection: sqlite3.Connection) -> None:
     }
     if "due_date" not in card_cols:
         connection.execute("ALTER TABLE cards ADD COLUMN due_date TEXT")
+
+
+def _migrate_to_v7(connection: sqlite3.Connection) -> None:
+    card_cols = {
+        r["name"]
+        for r in connection.execute("PRAGMA table_info(cards)").fetchall()
+    }
+    if "archived" not in card_cols:
+        connection.execute(
+            "ALTER TABLE cards ADD COLUMN archived INTEGER NOT NULL DEFAULT 0"
+        )
 
 
 def _migrate_to_v6(connection: sqlite3.Connection) -> None:
@@ -654,7 +669,9 @@ def save_board_by_id(
                 """,
                 (column.title, position, board_id, column.id),
             )
-        connection.execute("DELETE FROM cards WHERE board_id = ?", (board_id,))
+        connection.execute(
+            "DELETE FROM cards WHERE board_id = ? AND archived = 0", (board_id,)
+        )
         insert_board_cards(connection, board_id, board)
         connection.execute(
             "UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -685,7 +702,7 @@ def _load_board_data(db_path: Path, board_id: int) -> BoardData:
             """
             SELECT id, column_key, title, details, priority, due_date, labels
             FROM cards
-            WHERE board_id = ?
+            WHERE board_id = ? AND archived = 0
             ORDER BY column_key, position
             """,
             (board_id,),
@@ -909,6 +926,83 @@ def add_card_comment(
         body=row["body"],
         created_at=row["created_at"],
     )
+
+
+def list_archived_cards(db_path: Path, username: str, board_id: int) -> list[dict]:
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        rows = connection.execute(
+            """
+            SELECT id, title, details, priority, due_date, labels
+            FROM cards
+            WHERE board_id = ? AND archived = 1
+            ORDER BY updated_at DESC
+            """,
+            (board_id,),
+        ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "title": row["title"],
+            "details": row["details"],
+            "priority": row["priority"],
+            "due_date": row["due_date"],
+            "labels": json.loads(row["labels"] or "[]"),
+        }
+        for row in rows
+    ]
+
+
+def archive_card(db_path: Path, username: str, board_id: int, card_id: str) -> BoardData:
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        row = connection.execute(
+            "SELECT id, archived FROM cards WHERE board_id = ? AND id = ?",
+            (board_id, card_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Card not found.")
+        if row["archived"]:
+            raise HTTPException(status_code=422, detail="Card is already archived.")
+        min_pos = connection.execute(
+            "SELECT COALESCE(MIN(position), 0) - 1 AS min_pos FROM cards WHERE board_id = ? AND archived = 1",
+            (board_id,),
+        ).fetchone()["min_pos"]
+        connection.execute(
+            "UPDATE cards SET archived = 1, position = ? WHERE board_id = ? AND id = ?",
+            (min_pos, board_id, card_id),
+        )
+        connection.execute(
+            "UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (board_id,),
+        )
+    return _load_board_data(db_path, board_id)
+
+
+def restore_card(db_path: Path, username: str, board_id: int, card_id: str) -> BoardData:
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        row = connection.execute(
+            "SELECT id, archived FROM cards WHERE board_id = ? AND id = ?",
+            (board_id, card_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Card not found.")
+        if not row["archived"]:
+            raise HTTPException(status_code=422, detail="Card is not archived.")
+        max_pos = connection.execute(
+            "SELECT COALESCE(MAX(position), -1) AS max_pos FROM cards WHERE board_id = ? AND column_key = ? AND archived = 0",
+            (board_id, "col-backlog"),
+        ).fetchone()["max_pos"]
+        connection.execute(
+            "UPDATE cards SET archived = 0, column_key = 'col-backlog', position = ? WHERE board_id = ? AND id = ?",
+            (max_pos + 1, board_id, card_id),
+        )
+        connection.execute(
+            "UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (board_id,),
+        )
+    return _load_board_data(db_path, board_id)
 
 
 def delete_card_comment(

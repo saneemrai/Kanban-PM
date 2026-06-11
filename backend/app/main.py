@@ -13,6 +13,7 @@ from app.board_store import (
     LoginPayload,
     RegisterPayload,
     add_card_comment,
+    archive_card,
     change_user_password,
     connect as db_connect,
     create_board,
@@ -24,10 +25,12 @@ from app.board_store import (
     get_board_by_id,
     get_username_for_session,
     initialize_database,
+    list_archived_cards,
     list_boards,
     list_card_comments,
     register_user,
     rename_board,
+    restore_card,
     save_board,
     save_board_by_id,
     _get_first_board_id,
@@ -167,6 +170,32 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
             "boardChanged": True,
             "board": saved_board.model_dump(),
         }
+
+    @app.get("/api/boards/{board_id}/archive")
+    def read_archived_cards(
+        board_id: int,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        return list_archived_cards(app.state.db_path, username, board_id)
+
+    @app.post("/api/boards/{board_id}/cards/{card_id}/archive")
+    def archive_card_endpoint(
+        board_id: int,
+        card_id: str,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        return archive_card(app.state.db_path, username, board_id, card_id).model_dump()
+
+    @app.post("/api/boards/{board_id}/cards/{card_id}/restore")
+    def restore_card_endpoint(
+        board_id: int,
+        card_id: str,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        return restore_card(app.state.db_path, username, board_id, card_id).model_dump()
 
     @app.get("/api/boards/{board_id}/cards/{card_id}/comments")
     def read_card_comments(

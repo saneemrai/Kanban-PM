@@ -1045,3 +1045,111 @@ def test_comments_require_session(tmp_path: Path) -> None:
     assert client.post(
         f"/api/boards/{board_id}/cards/{card_id}/comments", json={"body": "x"}
     ).status_code == 401
+
+
+# --- Archive tests ---
+
+def test_archive_card_removes_from_board(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+
+    response = client.post(
+        f"/api/boards/{board_id}/cards/{card_id}/archive", headers=headers
+    )
+
+    assert response.status_code == 200
+    board = response.json()
+    all_card_ids = [cid for col in board["columns"] for cid in col["cardIds"]]
+    assert card_id not in all_card_ids
+    assert card_id not in board["cards"]
+
+
+def test_archive_list_shows_archived_card(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+    client.post(f"/api/boards/{board_id}/cards/{card_id}/archive", headers=headers)
+
+    response = client.get(f"/api/boards/{board_id}/archive", headers=headers)
+
+    assert response.status_code == 200
+    archived = response.json()
+    assert len(archived) == 1
+    assert archived[0]["id"] == card_id
+
+
+def test_archive_card_not_in_board_data(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+    client.post(f"/api/boards/{board_id}/cards/{card_id}/archive", headers=headers)
+
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    all_card_ids = [cid for col in board["columns"] for cid in col["cardIds"]]
+    assert card_id not in all_card_ids
+
+
+def test_restore_card_appears_in_backlog(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+    client.post(f"/api/boards/{board_id}/cards/{card_id}/archive", headers=headers)
+
+    response = client.post(
+        f"/api/boards/{board_id}/cards/{card_id}/restore", headers=headers
+    )
+
+    assert response.status_code == 200
+    board = response.json()
+    backlog = next(col for col in board["columns"] if col["id"] == "col-backlog")
+    assert card_id in backlog["cardIds"]
+    assert card_id in board["cards"]
+
+
+def test_restore_removes_from_archive(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+    client.post(f"/api/boards/{board_id}/cards/{card_id}/archive", headers=headers)
+    client.post(f"/api/boards/{board_id}/cards/{card_id}/restore", headers=headers)
+
+    archived = client.get(f"/api/boards/{board_id}/archive", headers=headers).json()
+
+    assert len(archived) == 0
+
+
+def test_save_board_preserves_archived_cards(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+    client.post(f"/api/boards/{board_id}/cards/{card_id}/archive", headers=headers)
+
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    board["columns"][0]["title"] = "Modified"
+    client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    archived = client.get(f"/api/boards/{board_id}/archive", headers=headers).json()
+    assert any(a["id"] == card_id for a in archived)
+
+
+def test_archive_nonexistent_card_returns_404(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    response = client.post(
+        f"/api/boards/{board_id}/cards/no-such-card/archive", headers=headers
+    )
+
+    assert response.status_code == 404
+
+
+def test_archive_requires_session(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+
+    assert client.post(f"/api/boards/{board_id}/cards/{card_id}/archive").status_code == 401
+    assert client.get(f"/api/boards/{board_id}/archive").status_code == 401

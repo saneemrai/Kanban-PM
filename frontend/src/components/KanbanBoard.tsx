@@ -23,13 +23,14 @@ const collisionDetection: CollisionDetection = (args) => {
   return hits.length > 0 ? hits : closestCorners(args);
 };
 import { AiChatSidebar } from "@/components/AiChatSidebar";
+import { ArchiveDrawer } from "@/components/ArchiveDrawer";
 import { BoardStats } from "@/components/BoardStats";
 import { CardDetailModal } from "@/components/CardDetailModal";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 import { FilterBar, defaultFilter, isFilterActive, type FilterState } from "@/components/FilterBar";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
-import { ApiError, fetchBoard, renameBoard, saveBoard } from "@/lib/api";
+import { ApiError, archiveCard, fetchBoard, renameBoard, saveBoard } from "@/lib/api";
 import {
   columnEndDropId,
   createId,
@@ -76,6 +77,7 @@ export const KanbanBoard = ({
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [filter, setFilter] = useState<FilterState>(defaultFilter);
+  const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState(boardTitle);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const titleBeforeEdit = useRef(boardTitle);
@@ -273,6 +275,20 @@ export const KanbanBoard = ({
     });
   };
 
+  const handleArchiveCard = async (cardId: string) => {
+    try {
+      const updatedBoard = await archiveCard(sessionToken, boardId, cardId);
+      setBoard(updatedBoard);
+      setSaveState("saved");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        onSessionExpired();
+        return;
+      }
+      setSaveError("Could not archive card.");
+    }
+  };
+
   const handleAiBoardUpdate = (nextBoard: BoardData) => {
     setBoard(nextBoard);
     setSaveError("");
@@ -394,6 +410,18 @@ export const KanbanBoard = ({
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
               type="button"
+              onClick={() => setIsArchiveOpen(true)}
+              aria-label="Open archive"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--stroke)] px-3 py-2 text-xs font-medium text-[var(--gray-text)] transition hover:bg-[var(--surface)]"
+            >
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <rect x="1" y="3" width="12" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+                <path d="M1 6h12M5 9h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              </svg>
+              Archive
+            </button>
+            <button
+              type="button"
               onClick={() => setIsChatOpen(true)}
               className="inline-flex items-center gap-2 rounded-full bg-[var(--primary-blue)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:brightness-110"
             >
@@ -455,6 +483,7 @@ export const KanbanBoard = ({
                     onAddCard={handleAddCard}
                     onDeleteCard={handleDeleteCard}
                     onEditCard={setEditingCardId}
+                    onArchiveCard={handleArchiveCard}
                   />
                 );
               })}
@@ -484,6 +513,18 @@ export const KanbanBoard = ({
           <ChangePasswordModal
             sessionToken={sessionToken}
             onClose={() => setIsChangingPassword(false)}
+          />
+        ) : null}
+
+        {isArchiveOpen ? (
+          <ArchiveDrawer
+            sessionToken={sessionToken}
+            boardId={boardId}
+            onClose={() => setIsArchiveOpen(false)}
+            onRestore={(updatedBoard) => {
+              setBoard(updatedBoard);
+              setSaveState("saved");
+            }}
           />
         ) : null}
 

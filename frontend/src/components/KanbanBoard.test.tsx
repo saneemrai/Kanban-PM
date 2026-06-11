@@ -34,6 +34,16 @@ const mockBoardFetch = (board: BoardData = initialData) => {
     if (url.includes("/comments")) {
       return Response.json([]);
     }
+    if (url.includes("/archive") && !url.includes("/cards/") && init?.method !== "POST") {
+      return Response.json([]);
+    }
+    if (url.includes("/archive") && init?.method === "POST") {
+      const nextBoard = { ...board, columns: board.columns.map((c, i) => i === 0 ? { ...c, cardIds: c.cardIds.slice(1) } : c), cards: Object.fromEntries(Object.entries(board.cards).filter(([id]) => id !== "card-1")) };
+      return Response.json(nextBoard);
+    }
+    if (url.includes("/restore") && init?.method === "POST") {
+      return Response.json(board);
+    }
     return Response.json(board);
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -344,6 +354,28 @@ describe("KanbanBoard", () => {
     const stats = screen.getByRole("region", { name: /board statistics/i });
     expect(stats).toBeInTheDocument();
     expect(within(stats).getByText("8")).toBeInTheDocument();
+  });
+
+  it("archives a card via the archive button", async () => {
+    mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    expect(screen.getByText("Align roadmap themes")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /archive Align roadmap themes/i }));
+
+    expect(screen.queryByText("Align roadmap themes")).not.toBeInTheDocument();
+  });
+
+  it("opens archive drawer from header button", async () => {
+    mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getByRole("button", { name: /open archive/i }));
+
+    expect(await screen.findByRole("dialog", { name: /card archive/i })).toBeVisible();
+    expect(screen.getByText("No archived cards")).toBeInTheDocument();
   });
 
   it("shows comments section in card modal and posts a comment", async () => {
