@@ -10,6 +10,29 @@ const PRIORITY_BADGE: Record<Priority, string> = {
   critical: "bg-red-100 text-red-700",
 };
 
+const formatDueDate = (due: string): { label: string; style: string } => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [y, m, d] = due.split("-").map(Number);
+  const dueDay = new Date(y, m - 1, d);
+  const diffDays = Math.round((dueDay.getTime() - today.getTime()) / 86400000);
+
+  if (diffDays < 0) {
+    return {
+      label: diffDays === -1 ? "Due yesterday" : `${Math.abs(diffDays)}d overdue`,
+      style: "bg-red-100 text-red-700",
+    };
+  }
+  if (diffDays === 0) {
+    return { label: "Due today", style: "bg-[rgba(236,173,10,0.2)] text-[#a07800]" };
+  }
+  if (diffDays === 1) {
+    return { label: "Due tomorrow", style: "bg-orange-100 text-orange-700" };
+  }
+  const fmt = dueDay.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return { label: `Due ${fmt}`, style: "bg-[rgba(32,157,215,0.12)] text-[var(--primary-blue)]" };
+};
+
 type KanbanCardProps = {
   card: Card;
   onDelete: (cardId: string) => void;
@@ -40,16 +63,26 @@ export const KanbanCard = ({ card, onDelete, onEdit }: KanbanCardProps) => {
     >
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          {card.priority ? (
-            <span
-              className={clsx(
-                "mb-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
-                PRIORITY_BADGE[card.priority]
-              )}
-            >
-              {card.priority}
-            </span>
-          ) : null}
+          <div className="mb-1.5 flex flex-wrap gap-1">
+            {card.priority ? (
+              <span
+                className={clsx(
+                  "inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                  PRIORITY_BADGE[card.priority]
+                )}
+              >
+                {card.priority}
+              </span>
+            ) : null}
+            {card.due_date ? (() => {
+              const { label, style } = formatDueDate(card.due_date);
+              return (
+                <span className={clsx("inline-block rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide", style)}>
+                  {label}
+                </span>
+              );
+            })() : null}
+          </div>
           <h4 className="font-display text-base font-semibold text-[var(--navy-dark)] leading-snug">
             {card.title}
           </h4>

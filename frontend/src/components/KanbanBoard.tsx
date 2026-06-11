@@ -24,13 +24,15 @@ const collisionDetection: CollisionDetection = (args) => {
 };
 import { AiChatSidebar } from "@/components/AiChatSidebar";
 import { CardDetailModal } from "@/components/CardDetailModal";
+import { FilterBar, defaultFilter, isFilterActive, type FilterState } from "@/components/FilterBar";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
-import { ApiError, fetchBoard, saveBoard } from "@/lib/api";
+import { ApiError, fetchBoard, renameBoard, saveBoard } from "@/lib/api";
 import {
   columnEndDropId,
   createId,
   initialData,
+  matchesFilter,
   moveCard,
   type BoardData,
   type Card,
@@ -67,6 +69,10 @@ export const KanbanBoard = ({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<FilterState>(defaultFilter);
+  const [titleDraft, setTitleDraft] = useState(boardTitle);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const titleBeforeEdit = useRef(boardTitle);
   const saveRequestId = useRef(0);
   const dragStartY = useRef<number | null>(null);
   const renameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -78,6 +84,16 @@ export const KanbanBoard = ({
   );
 
   const cardsById = useMemo(() => board.cards, [board.cards]);
+  const filteredCardIds = useMemo(() => {
+    if (!isFilterActive(filter)) return null;
+    const ids = new Set<string>();
+    for (const card of Object.values(board.cards)) {
+      if (matchesFilter(card, filter.searchText, filter.priority, filter.dueDate)) {
+        ids.add(card.id);
+      }
+    }
+    return ids;
+  }, [board.cards, filter]);
   const saveStatusLabel =
     saveState === "saving" ? "Saving changes" : "All changes saved";
 
@@ -223,7 +239,24 @@ export const KanbanBoard = ({
     });
   };
 
-  const handleSaveCard = (updates: Pick<Card, "title" | "details" | "priority">) => {
+  const handleSaveTitle = async () => {
+    setIsEditingTitle(false);
+    const trimmed = titleDraft.trim();
+    if (!trimmed) {
+      setTitleDraft(titleBeforeEdit.current);
+      return;
+    }
+    if (trimmed === titleBeforeEdit.current) return;
+    try {
+      await renameBoard(sessionToken, boardId, trimmed);
+      titleBeforeEdit.current = trimmed;
+    } catch {
+      setTitleDraft(titleBeforeEdit.current);
+      setSaveError("Could not rename board.");
+    }
+  };
+
+  const handleSaveCard = (updates: Pick<Card, "title" | "details" | "priority" | "due_date">) => {
     if (!editingCardId) return;
     commitBoard({
       ...board,
@@ -281,9 +314,42 @@ export const KanbanBoard = ({
               </svg>
               Boards
             </button>
-            <h1 className="font-display text-xl font-semibold text-[var(--navy-dark)] whitespace-nowrap truncate">
-              {boardTitle}
-            </h1>
+            {isEditingTitle ? (
+              <input
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={() => void handleSaveTitle()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void handleSaveTitle();
+                  if (e.key === "Escape") {
+                    setTitleDraft(titleBeforeEdit.current);
+                    setIsEditingTitle(false);
+                  }
+                }}
+                className="font-display text-xl font-semibold text-[var(--navy-dark)] bg-transparent border-b-2 border-[var(--primary-blue)] outline-none min-w-0 max-w-xs"
+                aria-label="Board title"
+                autoFocus
+              />
+            ) : (
+              <>
+                <h1 className="font-display text-xl font-semibold text-[var(--navy-dark)] whitespace-nowrap truncate">
+                  {titleDraft}
+                </h1>
+                <button
+                  type="button"
+                  onClick={() => {
+                    titleBeforeEdit.current = titleDraft;
+                    setIsEditingTitle(true);
+                  }}
+                  aria-label="Rename board"
+                  className="shrink-0 rounded-lg p-1 text-[var(--gray-text)] opacity-0 transition hover:bg-[var(--surface)] hover:opacity-100 focus:opacity-100"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                    <path d="M8.5 1.5a1.414 1.414 0 0 1 2 2L3.5 10.5l-3 .5.5-3 7.5-6.5z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </>
+            )}
             {saveState !== "idle" ? (
               <div
                 className="inline-flex items-center gap-1.5 rounded-full border border-[var(--stroke)] bg-white px-2.5 py-1 text-xs font-semibold text-[var(--navy-dark)] shadow-sm whitespace-nowrap"
@@ -333,6 +399,7 @@ export const KanbanBoard = ({
             <button
               type="button"
               onClick={onLogout}
+              aria-label="Log out"
               className="inline-flex items-center gap-2 rounded-full border border-[var(--stroke)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--navy-dark)] transition hover:bg-[var(--surface)]"
             >
               <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -343,6 +410,8 @@ export const KanbanBoard = ({
           </div>
         </header>
 
+        <FilterBar filter={filter} onChange={setFilter} />
+
         <DndContext
           sensors={sensors}
           collisionDetection={collisionDetection}
@@ -351,17 +420,24 @@ export const KanbanBoard = ({
         >
           <div className="overflow-x-auto">
             <section className="grid grid-cols-5 gap-4 min-w-[960px]">
-              {board.columns.map((column) => (
-                <KanbanColumn
-                  key={column.id}
-                  column={column}
-                  cards={column.cardIds.map((cardId) => board.cards[cardId])}
-                  onRename={handleRenameColumn}
-                  onAddCard={handleAddCard}
-                  onDeleteCard={handleDeleteCard}
-                  onEditCard={setEditingCardId}
-                />
-              ))}
+              {board.columns.map((column) => {
+                const allCards = column.cardIds.map((cardId) => board.cards[cardId]).filter(Boolean);
+                const visibleCards = filteredCardIds
+                  ? allCards.filter((card) => filteredCardIds.has(card.id))
+                  : allCards;
+                return (
+                  <KanbanColumn
+                    key={column.id}
+                    column={column}
+                    cards={visibleCards}
+                    isFiltered={filteredCardIds !== null}
+                    onRename={handleRenameColumn}
+                    onAddCard={handleAddCard}
+                    onDeleteCard={handleDeleteCard}
+                    onEditCard={setEditingCardId}
+                  />
+                );
+              })}
             </section>
           </div>
           <DragOverlay>

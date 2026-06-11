@@ -1,5 +1,6 @@
 import hashlib
 import secrets
+from datetime import datetime
 from pathlib import Path
 import sqlite3
 from typing import Any
@@ -21,7 +22,7 @@ FIXED_COLUMN_IDS = [
     "col-done",
 ]
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 VALID_PRIORITIES = {"low", "medium", "high", "critical"}
@@ -34,6 +35,7 @@ class Card(BaseModel):
     title: str
     details: str
     priority: str | None = None
+    due_date: str | None = None
 
 
 class Column(BaseModel):
@@ -185,6 +187,10 @@ def _run_migrations(connection: sqlite3.Connection) -> None:
         _migrate_to_v3(connection)
         connection.execute("UPDATE schema_version SET version = 3")
 
+    if version < 4:
+        _migrate_to_v4(connection)
+        connection.execute("UPDATE schema_version SET version = 4")
+
 
 def _migrate_to_v2(connection: sqlite3.Connection) -> None:
     connection.execute(
@@ -302,6 +308,15 @@ def _migrate_to_v3(connection: sqlite3.Connection) -> None:
     }
     if "priority" not in card_cols:
         connection.execute("ALTER TABLE cards ADD COLUMN priority TEXT")
+
+
+def _migrate_to_v4(connection: sqlite3.Connection) -> None:
+    card_cols = {
+        r["name"]
+        for r in connection.execute("PRAGMA table_info(cards)").fetchall()
+    }
+    if "due_date" not in card_cols:
+        connection.execute("ALTER TABLE cards ADD COLUMN due_date TEXT")
 
 
 def _boards_has_unique_user_id(sql: str) -> bool:
@@ -602,7 +617,7 @@ def _load_board_data(db_path: Path, board_id: int) -> BoardData:
         ).fetchall()
         cards = connection.execute(
             """
-            SELECT id, column_key, title, details, priority
+            SELECT id, column_key, title, details, priority, due_date
             FROM cards
             WHERE board_id = ?
             ORDER BY column_key, position
@@ -619,6 +634,7 @@ def _load_board_data(db_path: Path, board_id: int) -> BoardData:
             title=card["title"],
             details=card["details"],
             priority=card["priority"],
+            due_date=card["due_date"],
         )
 
     return BoardData(
@@ -680,10 +696,10 @@ def insert_board_cards(
             card = board.cards[card_id]
             connection.execute(
                 """
-                INSERT INTO cards (id, board_id, column_key, title, details, position, priority)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO cards (id, board_id, column_key, title, details, position, priority, due_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (card.id, board_id, column.id, card.title, card.details, position, card.priority),
+                (card.id, board_id, column.id, card.title, card.details, position, card.priority, card.due_date),
             )
 
 
@@ -736,5 +752,13 @@ def parse_and_validate_board(payload: dict[str, Any]) -> BoardData:
                 status_code=422,
                 detail=f"Invalid priority '{card.priority}'. Must be one of: {', '.join(sorted(VALID_PRIORITIES))}.",
             )
+        if card.due_date is not None:
+            try:
+                datetime.strptime(card.due_date, "%Y-%m-%d")
+            except ValueError as error:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Invalid due_date '{card.due_date}'. Must be YYYY-MM-DD.",
+                ) from error
 
     return board

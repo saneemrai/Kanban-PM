@@ -23,12 +23,10 @@ export const AuthenticatedApp = () => {
   const [isLoadingBoards, setIsLoadingBoards] = useState(false);
 
   useEffect(() => {
-    queueMicrotask(() => {
-      const token = window.localStorage.getItem(SESSION_TOKEN_KEY);
-      const uname = window.localStorage.getItem(SESSION_USERNAME_KEY) ?? "";
-      setSessionToken(token);
-      setStoredUsername(uname);
-    });
+    const token = window.localStorage.getItem(SESSION_TOKEN_KEY);
+    const uname = window.localStorage.getItem(SESSION_USERNAME_KEY) ?? "";
+    setSessionToken(token);
+    setStoredUsername(uname);
   }, []);
 
   const clearSession = useCallback(() => {

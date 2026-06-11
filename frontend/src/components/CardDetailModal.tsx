@@ -19,7 +19,7 @@ const PRIORITY_ACTIVE: Record<Priority, string> = {
 
 type CardDetailModalProps = {
   card: Card;
-  onSave: (updates: Pick<Card, "title" | "details" | "priority">) => void;
+  onSave: (updates: Pick<Card, "title" | "details" | "priority" | "due_date">) => void;
   onClose: () => void;
 };
 
@@ -27,10 +27,11 @@ export const CardDetailModal = ({ card, onSave, onClose }: CardDetailModalProps)
   const [title, setTitle] = useState(card.title);
   const [details, setDetails] = useState(card.details);
   const [priority, setPriority] = useState<Priority | null>(card.priority ?? null);
+  const [dueDate, setDueDate] = useState(card.due_date ?? "");
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    onSave({ title: title.trim() || card.title, details, priority });
+    onSave({ title: title.trim() || card.title, details, priority, due_date: dueDate || null });
     onClose();
   };
 
@@ -79,6 +80,15 @@ export const CardDetailModal = ({ card, onSave, onClose }: CardDetailModalProps)
               onChange={(e) => setDetails(e.target.value)}
               rows={4}
               className="mt-2 w-full resize-none border border-[var(--stroke)] px-3 py-2.5 text-sm font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+            />
+          </label>
+          <label className="block text-sm font-semibold text-[var(--navy-dark)]">
+            Due date
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="mt-2 w-full border border-[var(--stroke)] px-3 py-2.5 text-sm font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
             />
           </label>
           <div>

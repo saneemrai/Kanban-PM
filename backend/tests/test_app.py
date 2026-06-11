@@ -612,6 +612,49 @@ def test_ai_chat_with_board_id(tmp_path: Path, monkeypatch) -> None:
     assert "card-1" in second_board_data["columns"][4]["cardIds"]
 
 
+def test_card_due_date_roundtrip(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["cards"]["card-1"]["due_date"] = "2025-12-31"
+
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+    saved = response.json()
+
+    assert response.status_code == 200
+    assert saved["cards"]["card-1"]["due_date"] == "2025-12-31"
+
+
+def test_card_due_date_rejects_invalid_format(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    board["cards"]["card-1"]["due_date"] = "31-12-2025"
+
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    assert response.status_code == 422
+
+
+def test_card_due_date_null_clears_value(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["cards"]["card-1"]["due_date"] = "2025-06-01"
+    client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    board["cards"]["card-1"]["due_date"] = None
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["cards"]["card-1"]["due_date"] is None
+
+
 def test_card_priority_roundtrip(tmp_path: Path) -> None:
     client = make_client(tmp_path)
     headers = login(client)

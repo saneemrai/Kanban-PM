@@ -8,6 +8,7 @@ import { NewCardForm } from "@/components/NewCardForm";
 type KanbanColumnProps = {
   column: Column;
   cards: Card[];
+  isFiltered?: boolean;
   onRename: (columnId: string, title: string) => void;
   onAddCard: (columnId: string, title: string, details: string) => void;
   onDeleteCard: (columnId: string, cardId: string) => void;
@@ -17,6 +18,7 @@ type KanbanColumnProps = {
 export const KanbanColumn = ({
   column,
   cards,
+  isFiltered = false,
   onRename,
   onAddCard,
   onDeleteCard,
@@ -26,7 +28,9 @@ export const KanbanColumn = ({
   const { setNodeRef: setEndDropRef, isOver: isEndOver } = useDroppable({
     id: columnEndDropId(column.id),
   });
-  const cardCountLabel = `${cards.length} ${cards.length === 1 ? "card" : "cards"}`;
+  const cardCountLabel = isFiltered
+    ? `${cards.length} ${cards.length === 1 ? "match" : "matches"}`
+    : `${cards.length} ${cards.length === 1 ? "card" : "cards"}`;
 
   return (
     <section
@@ -66,7 +70,7 @@ export const KanbanColumn = ({
         </SortableContext>
         {cards.length === 0 && (
           <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-[var(--stroke)] px-3 py-6 text-center text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
-            Drop a card here
+            {isFiltered ? "No matches" : "Drop a card here"}
           </div>
         )}
         <div

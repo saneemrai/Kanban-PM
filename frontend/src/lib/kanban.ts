@@ -5,6 +5,7 @@ export type Card = {
   title: string;
   details: string;
   priority?: Priority | null;
+  due_date?: string | null;
 };
 
 export type BoardSummary = {
@@ -187,6 +188,42 @@ export const moveCard = (
     }
     return column;
   });
+};
+
+export const matchesFilter = (
+  card: Card,
+  searchText: string,
+  priority: string,
+  dueDate: string
+): boolean => {
+  if (searchText) {
+    const q = searchText.toLowerCase();
+    if (!card.title.toLowerCase().includes(q) && !(card.details ?? "").toLowerCase().includes(q)) {
+      return false;
+    }
+  }
+
+  if (priority !== "all" && card.priority !== priority) {
+    return false;
+  }
+
+  if (dueDate !== "all") {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (dueDate === "none") {
+      if (card.due_date) return false;
+    } else {
+      if (!card.due_date) return false;
+      const [y, m, d] = card.due_date.split("-").map(Number);
+      const dueDay = new Date(y, m - 1, d);
+      const diff = Math.round((dueDay.getTime() - today.getTime()) / 86_400_000);
+      if (dueDate === "overdue" && diff >= 0) return false;
+      if (dueDate === "today" && diff !== 0) return false;
+      if (dueDate === "upcoming" && diff <= 0) return false;
+    }
+  }
+
+  return true;
 };
 
 export const createId = (prefix: string) => {

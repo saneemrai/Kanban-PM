@@ -229,4 +229,58 @@ describe("KanbanBoard", () => {
 
     expect(onBackToBoards).toHaveBeenCalledOnce();
   });
+
+  it("filters cards by search text", async () => {
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    const searchInput = screen.getByLabelText("Search cards");
+    await userEvent.type(searchInput, "roadmap");
+
+    expect(screen.getByText("Align roadmap themes")).toBeInTheDocument();
+    expect(screen.queryByText("Gather customer signals")).not.toBeInTheDocument();
+  });
+
+  it("filters cards by priority", async () => {
+    const boardWithPriorities: BoardData = {
+      ...initialData,
+      cards: {
+        ...initialData.cards,
+        "card-1": { ...initialData.cards["card-1"], priority: "high" as const },
+        "card-2": { ...initialData.cards["card-2"], priority: "low" as const },
+      },
+    };
+    mockBoardFetch(boardWithPriorities);
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getByRole("button", { name: "Filter by high priority" }));
+
+    expect(screen.getByText("Align roadmap themes")).toBeInTheDocument();
+    expect(screen.queryByText("Gather customer signals")).not.toBeInTheDocument();
+  });
+
+  it("clears filters with the clear button", async () => {
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    const searchInput = screen.getByLabelText("Search cards");
+    await userEvent.type(searchInput, "roadmap");
+
+    expect(screen.queryByText("Gather customer signals")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+
+    expect(screen.getByText("Gather customer signals")).toBeInTheDocument();
+  });
+
+  it("shows match counts per column when filter is active", async () => {
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.type(screen.getByLabelText("Search cards"), "roadmap");
+
+    const backlogColumn = screen.getByTestId("column-col-backlog");
+    expect(within(backlogColumn).getByText("1 match")).toBeInTheDocument();
+  });
 });
