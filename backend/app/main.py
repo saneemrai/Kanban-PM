@@ -28,6 +28,8 @@ from app.board_store import (
     delete_card_link,
     delete_checklist_item,
     delete_session,
+    bulk_archive_cards,
+    bulk_move_cards,
     get_board,
     get_board_by_id,
     get_board_stats,
@@ -144,6 +146,33 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
     ):
         username = get_username_for_session(app.state.db_path, x_pm_session)
         delete_board_label(app.state.db_path, username, board_id, label_id)
+
+    @app.post("/api/boards/{board_id}/cards/bulk-move")
+    def bulk_move(
+        board_id: int,
+        payload: dict,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        card_ids = payload.get("cardIds", [])
+        target_column = payload.get("targetColumn", "")
+        if not isinstance(card_ids, list) or not all(isinstance(c, str) for c in card_ids):
+            raise HTTPException(status_code=422, detail="cardIds must be a list of strings.")
+        if not target_column:
+            raise HTTPException(status_code=422, detail="targetColumn is required.")
+        return bulk_move_cards(app.state.db_path, username, board_id, card_ids, target_column)
+
+    @app.post("/api/boards/{board_id}/cards/bulk-archive")
+    def bulk_archive(
+        board_id: int,
+        payload: dict,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        card_ids = payload.get("cardIds", [])
+        if not isinstance(card_ids, list) or not all(isinstance(c, str) for c in card_ids):
+            raise HTTPException(status_code=422, detail="cardIds must be a list of strings.")
+        return bulk_archive_cards(app.state.db_path, username, board_id, card_ids)
 
     @app.get("/api/boards/{board_id}/stats")
     def read_board_stats(

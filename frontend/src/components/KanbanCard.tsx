@@ -70,9 +70,12 @@ type KanbanCardProps = {
   onMove?: (targetColumnId: string) => void;
   otherColumns?: { id: string; title: string }[];
   boardLabels?: BoardLabel[];
+  isSelectMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (cardId: string) => void;
 };
 
-export const KanbanCard = ({ card, onDelete, onEdit, onArchive, onDuplicate, onMove, otherColumns, boardLabels = [] }: KanbanCardProps) => {
+export const KanbanCard = ({ card, onDelete, onEdit, onArchive, onDuplicate, onMove, otherColumns, boardLabels = [], isSelectMode = false, isSelected = false, onToggleSelect }: KanbanCardProps) => {
   const [moveMenuOpen, setMoveMenuOpen] = useState(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: card.id });
@@ -87,15 +90,32 @@ export const KanbanCard = ({ card, onDelete, onEdit, onArchive, onDuplicate, onM
       ref={setNodeRef}
       style={style}
       className={clsx(
-        "group rounded-2xl border border-transparent bg-white px-4 py-3.5 shadow-[0_12px_24px_rgba(3,33,71,0.08)]",
+        "group rounded-2xl border bg-white px-4 py-3.5 shadow-[0_12px_24px_rgba(3,33,71,0.08)]",
         "transition-all duration-150",
         card.color && CARD_COLORS[card.color],
+        !card.color && (isSelected ? "border-[var(--secondary-purple)]" : "border-transparent"),
         isDragging && "opacity-60 shadow-[0_18px_32px_rgba(3,33,71,0.16)]"
       )}
-      {...attributes}
-      {...listeners}
+      {...(!isSelectMode ? attributes : {})}
+      {...(!isSelectMode ? listeners : {})}
       data-testid={`card-${card.id}`}
+      onClick={isSelectMode ? () => onToggleSelect?.(card.id) : undefined}
     >
+      {isSelectMode ? (
+        <div className="mb-2 flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggleSelect?.(card.id)}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`Select ${card.title}`}
+            className="h-4 w-4 cursor-pointer accent-[var(--secondary-purple)]"
+          />
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--gray-text)]">
+            {isSelected ? "Selected" : "Select"}
+          </span>
+        </div>
+      ) : null}
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           {card.labels && card.labels.length > 0 ? (

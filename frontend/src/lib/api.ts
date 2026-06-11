@@ -511,6 +511,33 @@ export const fetchBoardStats = async (sessionToken: string, boardId: number): Pr
   return parseResponse(response);
 };
 
+export const bulkMoveCards = async (
+  sessionToken: string,
+  boardId: number,
+  cardIds: string[],
+  targetColumn: string
+): Promise<import("@/lib/kanban").BoardData> => {
+  const response = await fetch(`/api/boards/${boardId}/cards/bulk-move`, {
+    method: "POST",
+    headers: { ...sessionHeaders(sessionToken), "Content-Type": "application/json" },
+    body: JSON.stringify({ cardIds, targetColumn }),
+  });
+  return parseResponse(response);
+};
+
+export const bulkArchiveCards = async (
+  sessionToken: string,
+  boardId: number,
+  cardIds: string[]
+): Promise<import("@/lib/kanban").BoardData> => {
+  const response = await fetch(`/api/boards/${boardId}/cards/bulk-archive`, {
+    method: "POST",
+    headers: { ...sessionHeaders(sessionToken), "Content-Type": "application/json" },
+    body: JSON.stringify({ cardIds }),
+  });
+  return parseResponse(response);
+};
+
 export const cloneBoard = async (
   sessionToken: string,
   boardId: number,

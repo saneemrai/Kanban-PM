@@ -21,6 +21,9 @@ type KanbanColumnProps = {
   onMoveCard?: (cardId: string, toColumnId: string) => void;
   allColumns?: { id: string; title: string }[];
   boardLabels?: BoardLabel[];
+  isSelectMode?: boolean;
+  selectedCards?: Set<string>;
+  onToggleSelect?: (cardId: string) => void;
 };
 
 export const KanbanColumn = ({
@@ -37,6 +40,9 @@ export const KanbanColumn = ({
   onMoveCard,
   allColumns,
   boardLabels,
+  isSelectMode = false,
+  selectedCards,
+  onToggleSelect,
 }: KanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const { setNodeRef: setEndDropRef, isOver: isEndOver } = useDroppable({
@@ -187,6 +193,9 @@ export const KanbanColumn = ({
               onMove={onMoveCard ? (toColumnId) => onMoveCard(card.id, toColumnId) : undefined}
               otherColumns={allColumns ? allColumns.filter((c) => c.id !== column.id) : undefined}
               boardLabels={boardLabels}
+              isSelectMode={isSelectMode}
+              isSelected={selectedCards?.has(card.id) ?? false}
+              onToggleSelect={onToggleSelect}
             />
           ))}
         </SortableContext>

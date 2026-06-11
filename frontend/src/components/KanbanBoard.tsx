@@ -34,7 +34,7 @@ import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { KeyboardShortcutsOverlay } from "@/components/KeyboardShortcutsOverlay";
 import { LabelsDrawer } from "@/components/LabelsDrawer";
-import { ApiError, archiveCard, fetchBoard, listBoardLabels, updateBoardMeta, saveBoard, type BoardLabel } from "@/lib/api";
+import { ApiError, archiveCard, bulkArchiveCards, bulkMoveCards, fetchBoard, listBoardLabels, updateBoardMeta, saveBoard, type BoardLabel } from "@/lib/api";
 import {
   columnEndDropId,
   createId,
@@ -88,6 +88,9 @@ export const KanbanBoard = ({
   const [isLabelsOpen, setIsLabelsOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set());
+  const [isBulkPending, setIsBulkPending] = useState(false);
   const [boardLabels, setBoardLabels] = useState<BoardLabel[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [titleDraft, setTitleDraft] = useState(boardTitle);
@@ -428,6 +431,58 @@ export const KanbanBoard = ({
     URL.revokeObjectURL(url);
   };
 
+  const toggleCardSelection = (cardId: string) => {
+    setSelectedCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(cardId)) next.delete(cardId);
+      else next.add(cardId);
+      return next;
+    });
+  };
+
+  const exitSelectMode = () => {
+    setIsSelectMode(false);
+    setSelectedCards(new Set());
+  };
+
+  const handleBulkMove = async (targetColumnId: string) => {
+    if (selectedCards.size === 0 || isBulkPending) return;
+    setIsBulkPending(true);
+    try {
+      const nextBoard = await bulkMoveCards(sessionToken, boardId, [...selectedCards], targetColumnId);
+      setBoard(nextBoard);
+      setSaveState("saved");
+      exitSelectMode();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        onSessionExpired();
+        return;
+      }
+      setSaveError("Bulk move failed.");
+    } finally {
+      setIsBulkPending(false);
+    }
+  };
+
+  const handleBulkArchive = async () => {
+    if (selectedCards.size === 0 || isBulkPending) return;
+    setIsBulkPending(true);
+    try {
+      const nextBoard = await bulkArchiveCards(sessionToken, boardId, [...selectedCards]);
+      setBoard(nextBoard);
+      setSaveState("saved");
+      exitSelectMode();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        onSessionExpired();
+        return;
+      }
+      setSaveError("Bulk archive failed.");
+    } finally {
+      setIsBulkPending(false);
+    }
+  };
+
   const handleAiBoardUpdate = (nextBoard: BoardData) => {
     setBoard(nextBoard);
     setSaveError("");
@@ -576,6 +631,21 @@ export const KanbanBoard = ({
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
               type="button"
+              onClick={() => { setIsSelectMode((prev) => !prev); setSelectedCards(new Set()); }}
+              aria-label={isSelectMode ? "Exit select mode" : "Select cards"}
+              aria-pressed={isSelectMode}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium transition ${isSelectMode ? "border-[var(--secondary-purple)] bg-[rgba(117,57,145,0.08)] text-[var(--secondary-purple)]" : "border-[var(--stroke)] text-[var(--gray-text)] hover:bg-[var(--surface)]"}`}
+            >
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.3"/>
+                <rect x="8" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.3"/>
+                <rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.3"/>
+                <path d="M9.5 9.5l1.5 1.5 2-2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Select
+            </button>
+            <button
+              type="button"
               onClick={handleExport}
               aria-label="Export board"
               className="inline-flex items-center gap-1.5 rounded-full border border-[var(--stroke)] px-3 py-2 text-xs font-medium text-[var(--gray-text)] transition hover:bg-[var(--surface)]"
@@ -711,6 +781,9 @@ export const KanbanBoard = ({
                     onMoveCard={(cardId, toColumnId) => handleMoveCard(cardId, column.id, toColumnId)}
                     allColumns={board.columns.map((c) => ({ id: c.id, title: c.title }))}
                     boardLabels={boardLabels}
+                    isSelectMode={isSelectMode}
+                    selectedCards={selectedCards}
+                    onToggleSelect={toggleCardSelection}
                   />
                 );
               })}
@@ -724,6 +797,51 @@ export const KanbanBoard = ({
             ) : null}
           </DragOverlay>
         </DndContext>
+
+        {isSelectMode ? (
+          <div
+            className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 flex items-center gap-3 rounded-2xl border border-[var(--stroke)] bg-white px-5 py-3 shadow-2xl"
+            aria-label="Bulk actions toolbar"
+            role="toolbar"
+          >
+            <span className="text-sm font-semibold text-[var(--navy-dark)]">
+              {selectedCards.size} selected
+            </span>
+            <div className="h-4 w-px bg-[var(--stroke)]" />
+            <div className="flex items-center gap-1">
+              {board.columns.map((col) => (
+                <button
+                  key={col.id}
+                  type="button"
+                  onClick={() => handleBulkMove(col.id)}
+                  disabled={isBulkPending || selectedCards.size === 0}
+                  aria-label={`Move to ${col.title}`}
+                  className="rounded-full border border-[var(--stroke)] px-3 py-1.5 text-xs font-medium text-[var(--navy-dark)] transition hover:border-[var(--primary-blue)] hover:text-[var(--primary-blue)] disabled:opacity-50"
+                >
+                  {col.title}
+                </button>
+              ))}
+            </div>
+            <div className="h-4 w-px bg-[var(--stroke)]" />
+            <button
+              type="button"
+              onClick={handleBulkArchive}
+              disabled={isBulkPending || selectedCards.size === 0}
+              aria-label="Archive selected cards"
+              className="rounded-full border border-[var(--stroke)] px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+            >
+              Archive
+            </button>
+            <button
+              type="button"
+              onClick={exitSelectMode}
+              aria-label="Cancel selection"
+              className="rounded-full border border-[var(--stroke)] px-3 py-1.5 text-xs font-medium text-[var(--gray-text)] transition hover:bg-[var(--surface)]"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
 
         {editingCardId && board.cards[editingCardId] ? (
           <CardDetailModal

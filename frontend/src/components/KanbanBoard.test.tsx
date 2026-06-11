@@ -88,6 +88,12 @@ const mockBoardFetch = (board: BoardData = initialData) => {
     if (url.includes("/links")) {
       return Response.json({ blocking: [], blockedBy: [] });
     }
+    if (url.includes("/bulk-move") && init?.method === "POST") {
+      return Response.json(board);
+    }
+    if (url.includes("/bulk-archive") && init?.method === "POST") {
+      return Response.json(board);
+    }
     if (url.includes("/stats")) {
       return Response.json({
         totalCards: Object.keys(board.cards).length,
@@ -699,6 +705,36 @@ describe("KanbanBoard", () => {
     expect(within(discoveryColumn).getByText("Align roadmap themes")).toBeInTheDocument();
     const backlogColumn = screen.getByTestId("column-col-backlog");
     expect(within(backlogColumn).queryByText("Align roadmap themes")).not.toBeInTheDocument();
+  });
+
+  it("shows checkboxes on cards when select mode is active", async () => {
+    mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getByRole("button", { name: /select cards/i }));
+
+    expect(await screen.findAllByRole("checkbox", { name: /select /i })).not.toHaveLength(0);
+  });
+
+  it("shows bulk toolbar when a card is selected", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/bulk-move")) return Response.json(JSON.parse((init?.body ?? "{}") as string));
+      if (url.includes("/bulk-archive")) return Response.json(JSON.parse((init?.body ?? "{}") as string));
+      return (mockBoardFetch() as unknown as typeof fetchMock)(input, init);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getByRole("button", { name: /select cards/i }));
+    const checkboxes = await screen.findAllByRole("checkbox", { name: /select /i });
+    await userEvent.click(checkboxes[0]);
+
+    expect(screen.getByRole("toolbar", { name: /bulk actions/i })).toBeInTheDocument();
+    expect(screen.getByText(/1 selected/i)).toBeInTheDocument();
   });
 
   it("shows keyboard shortcuts overlay when ? button is clicked", async () => {

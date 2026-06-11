@@ -1712,6 +1712,79 @@ def update_board_label(db_path: Path, username: str, board_id: int, label_id: in
     return {"id": label_id, "name": new_name, "color": new_color}
 
 
+def bulk_move_cards(
+    db_path: Path, username: str, board_id: int, card_ids: list[str], target_column: str
+) -> BoardData:
+    if not card_ids:
+        raise HTTPException(status_code=422, detail="No card IDs provided.")
+    if len(card_ids) > 100:
+        raise HTTPException(status_code=422, detail="Cannot move more than 100 cards at once.")
+    if target_column not in FIXED_COLUMN_IDS:
+        raise HTTPException(status_code=422, detail=f"Invalid column '{target_column}'.")
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        max_pos = connection.execute(
+            "SELECT COALESCE(MAX(position), -1) AS max_pos FROM cards WHERE board_id = ? AND column_key = ? AND archived = 0",
+            (board_id, target_column),
+        ).fetchone()["max_pos"]
+        for i, card_id in enumerate(card_ids):
+            row = connection.execute(
+                "SELECT id, title, column_key FROM cards WHERE board_id = ? AND id = ? AND archived = 0",
+                (board_id, card_id),
+            ).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail=f"Card '{card_id}' not found.")
+            if row["column_key"] != target_column:
+                connection.execute(
+                    "UPDATE cards SET column_key = ?, position = ? WHERE board_id = ? AND id = ?",
+                    (target_column, max_pos + 1 + i, board_id, card_id),
+                )
+                _log_activity(
+                    connection, board_id, username, "card_moved",
+                    card_id=card_id, card_title=row["title"],
+                    meta={"from": row["column_key"], "to": target_column}
+                )
+        connection.execute(
+            "UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (board_id,)
+        )
+    return _load_board_data(db_path, board_id)
+
+
+def bulk_archive_cards(
+    db_path: Path, username: str, board_id: int, card_ids: list[str]
+) -> BoardData:
+    if not card_ids:
+        raise HTTPException(status_code=422, detail="No card IDs provided.")
+    if len(card_ids) > 100:
+        raise HTTPException(status_code=422, detail="Cannot archive more than 100 cards at once.")
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        min_pos = connection.execute(
+            "SELECT COALESCE(MIN(position), 0) - 1 AS min_pos FROM cards WHERE board_id = ? AND archived = 1",
+            (board_id,),
+        ).fetchone()["min_pos"]
+        for i, card_id in enumerate(card_ids):
+            row = connection.execute(
+                "SELECT id, title, archived FROM cards WHERE board_id = ? AND id = ?",
+                (board_id, card_id),
+            ).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail=f"Card '{card_id}' not found.")
+            if not row["archived"]:
+                connection.execute(
+                    "UPDATE cards SET archived = 1, position = ? WHERE board_id = ? AND id = ?",
+                    (min_pos - i, board_id, card_id),
+                )
+                _log_activity(
+                    connection, board_id, username, "card_archived",
+                    card_id=card_id, card_title=row["title"]
+                )
+        connection.execute(
+            "UPDATE boards SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (board_id,)
+        )
+    return _load_board_data(db_path, board_id)
+
+
 def get_board_stats(db_path: Path, username: str, board_id: int) -> dict:
     with connect(db_path) as connection:
         _verify_board_ownership(connection, username, board_id)

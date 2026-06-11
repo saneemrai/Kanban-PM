@@ -2202,6 +2202,133 @@ def test_search_requires_session(tmp_path: Path) -> None:
     assert client.get("/api/search?q=anything").status_code == 401
 
 
+# --- Bulk operations tests ---
+
+def test_bulk_move_moves_cards_to_target_column(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    card_ids = board["columns"][0]["cardIds"][:2]
+
+    response = client.post(
+        f"/api/boards/{board_id}/cards/bulk-move",
+        json={"cardIds": card_ids, "targetColumn": "col-done"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    updated = response.json()
+    done_ids = updated["columns"][-1]["cardIds"]
+    for cid in card_ids:
+        assert cid in done_ids
+
+
+def test_bulk_move_requires_valid_column(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    card_ids = board["columns"][0]["cardIds"][:1]
+
+    response = client.post(
+        f"/api/boards/{board_id}/cards/bulk-move",
+        json={"cardIds": card_ids, "targetColumn": "col-nonexistent"},
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_bulk_move_empty_list_rejected(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    response = client.post(
+        f"/api/boards/{board_id}/cards/bulk-move",
+        json={"cardIds": [], "targetColumn": "col-done"},
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_bulk_archive_removes_cards_from_board(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    card_ids = board["columns"][0]["cardIds"][:2]
+
+    response = client.post(
+        f"/api/boards/{board_id}/cards/bulk-archive",
+        json={"cardIds": card_ids},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    updated = response.json()
+    all_active_ids = [cid for col in updated["columns"] for cid in col["cardIds"]]
+    for cid in card_ids:
+        assert cid not in all_active_ids
+
+
+def test_bulk_archive_cards_appear_in_archive(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    card_ids = board["columns"][0]["cardIds"][:1]
+
+    client.post(
+        f"/api/boards/{board_id}/cards/bulk-archive",
+        json={"cardIds": card_ids},
+        headers=headers,
+    )
+    archived = client.get(f"/api/boards/{board_id}/archive", headers=headers).json()
+
+    archived_ids = [c["id"] for c in archived]
+    for cid in card_ids:
+        assert cid in archived_ids
+
+
+def test_bulk_archive_empty_list_rejected(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    response = client.post(
+        f"/api/boards/{board_id}/cards/bulk-archive",
+        json={"cardIds": []},
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_bulk_move_requires_session(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    assert client.post(
+        f"/api/boards/{board_id}/cards/bulk-move",
+        json={"cardIds": ["x"], "targetColumn": "col-done"},
+    ).status_code == 401
+
+
+def test_bulk_archive_requires_session(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    assert client.post(
+        f"/api/boards/{board_id}/cards/bulk-archive",
+        json={"cardIds": ["x"]},
+    ).status_code == 401
+
+
 def test_search_returns_empty_for_short_query(tmp_path: Path) -> None:
     client = make_client(tmp_path)
     headers = login(client)
