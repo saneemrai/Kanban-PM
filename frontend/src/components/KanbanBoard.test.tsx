@@ -391,6 +391,17 @@ describe("KanbanBoard", () => {
     expect(screen.queryByText("Align roadmap themes")).not.toBeInTheDocument();
   });
 
+  it("duplicates a card", async () => {
+    mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    expect(screen.getAllByText("Align roadmap themes")).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: /duplicate Align roadmap themes/i }));
+
+    expect(screen.getByText("Align roadmap themes (copy)")).toBeInTheDocument();
+  });
+
   it("opens activity drawer from header button", async () => {
     mockBoardFetch();
     render(<KanbanBoard {...defaultProps} />);

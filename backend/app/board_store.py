@@ -690,15 +690,20 @@ def save_board_by_id(
     board = parse_and_validate_board(payload)
     with connect(db_path) as connection:
         _verify_board_ownership(connection, username, board_id)
-        existing_ids = {
-            row["id"]
-            for row in connection.execute(
-                "SELECT id FROM cards WHERE board_id = ? AND archived = 0", (board_id,)
-            ).fetchall()
-        }
+        existing_rows = connection.execute(
+            "SELECT id, column_key FROM cards WHERE board_id = ? AND archived = 0",
+            (board_id,),
+        ).fetchall()
+        existing_column: dict[str, str] = {row["id"]: row["column_key"] for row in existing_rows}
+        existing_ids = set(existing_column.keys())
         new_ids = set(board.cards.keys())
         created_ids = new_ids - existing_ids
         deleted_ids = existing_ids - new_ids
+        moved_cards: list[tuple[str, str, str, str]] = []
+        for column in board.columns:
+            for card_id in column.cardIds:
+                if card_id in existing_column and existing_column[card_id] != column.id:
+                    moved_cards.append((card_id, board.cards[card_id].title, existing_column[card_id], column.id))
         for position, column in enumerate(board.columns):
             connection.execute(
                 """
@@ -725,6 +730,12 @@ def save_board_by_id(
         for card_id in deleted_ids:
             _log_activity(
                 connection, board_id, username, "card_deleted", card_id=card_id
+            )
+        for card_id, card_title, from_col, to_col in moved_cards:
+            _log_activity(
+                connection, board_id, username, "card_moved",
+                card_id=card_id, card_title=card_title,
+                meta={"from": from_col, "to": to_col}
             )
     return _load_board_data(db_path, board_id)
 

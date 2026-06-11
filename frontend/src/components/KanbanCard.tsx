@@ -52,9 +52,10 @@ type KanbanCardProps = {
   onDelete: (cardId: string) => void;
   onEdit: (cardId: string) => void;
   onArchive?: (cardId: string) => void;
+  onDuplicate?: (cardId: string) => void;
 };
 
-export const KanbanCard = ({ card, onDelete, onEdit, onArchive }: KanbanCardProps) => {
+export const KanbanCard = ({ card, onDelete, onEdit, onArchive, onDuplicate }: KanbanCardProps) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: card.id });
 
@@ -121,6 +122,20 @@ export const KanbanCard = ({ card, onDelete, onEdit, onArchive }: KanbanCardProp
           </p>
         </div>
         <div className="mt-0.5 flex shrink-0 flex-col gap-1">
+          {onDuplicate ? (
+            <button
+              type="button"
+              onClick={() => onDuplicate(card.id)}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="rounded-lg p-1.5 text-[var(--gray-text)] opacity-0 transition-all hover:bg-[var(--surface)] hover:text-[var(--navy-dark)] group-hover:opacity-100"
+              aria-label={`Duplicate ${card.title}`}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <rect x="1" y="3" width="7" height="8" rx="1" stroke="currentColor" strokeWidth="1.4"/>
+                <path d="M4 3V2a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => onEdit(card.id)}

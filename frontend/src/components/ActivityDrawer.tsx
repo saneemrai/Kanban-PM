@@ -8,6 +8,7 @@ const ACTION_LABELS: Record<string, string> = {
   card_deleted: "deleted card",
   card_archived: "archived card",
   card_restored: "restored card",
+  card_moved: "moved card",
   board_renamed: "renamed board",
 };
 
@@ -16,6 +17,7 @@ const ACTION_ICONS: Record<string, string> = {
   card_deleted: "bg-red-100 text-red-700",
   card_archived: "bg-[rgba(236,173,10,0.15)] text-[#a07800]",
   card_restored: "bg-[rgba(32,157,215,0.15)] text-[var(--primary-blue)]",
+  card_moved: "bg-[var(--stroke)] text-[var(--gray-text)]",
   board_renamed: "bg-[rgba(117,57,145,0.15)] text-[var(--secondary-purple)]",
 };
 

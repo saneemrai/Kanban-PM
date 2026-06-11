@@ -1222,6 +1222,25 @@ def test_activity_logs_board_rename(tmp_path: Path) -> None:
     assert rename_events[0]["meta"]["to"] == "Renamed Board"
 
 
+def test_activity_logs_card_move(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    card_id = board["columns"][0]["cardIds"][0]
+    board["columns"][0]["cardIds"].remove(card_id)
+    board["columns"][1]["cardIds"].append(card_id)
+    client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    activity = client.get(f"/api/boards/{board_id}/activity", headers=headers).json()
+    move_events = [a for a in activity if a["action"] == "card_moved"]
+    assert len(move_events) == 1
+    assert move_events[0]["cardId"] == card_id
+    assert move_events[0]["meta"]["from"] == "col-backlog"
+    assert move_events[0]["meta"]["to"] == "col-discovery"
+
+
 def test_activity_requires_session(tmp_path: Path) -> None:
     client = make_client(tmp_path)
     headers = login(client)

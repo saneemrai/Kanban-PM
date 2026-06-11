@@ -283,6 +283,31 @@ export const KanbanBoard = ({
     });
   };
 
+  const handleDuplicateCard = (columnId: string, cardId: string) => {
+    const source = board.cards[cardId];
+    if (!source) return;
+    const newId = createId("card");
+    commitBoard({
+      ...board,
+      cards: {
+        ...board.cards,
+        [newId]: { ...source, id: newId, title: `${source.title} (copy)` },
+      },
+      columns: board.columns.map((col) =>
+        col.id === columnId
+          ? {
+              ...col,
+              cardIds: [
+                ...col.cardIds.slice(0, col.cardIds.indexOf(cardId) + 1),
+                newId,
+                ...col.cardIds.slice(col.cardIds.indexOf(cardId) + 1),
+              ],
+            }
+          : col
+      ),
+    });
+  };
+
   const handleArchiveCard = async (cardId: string) => {
     try {
       const updatedBoard = await archiveCard(sessionToken, boardId, cardId);
@@ -504,6 +529,7 @@ export const KanbanBoard = ({
                     onDeleteCard={handleDeleteCard}
                     onEditCard={setEditingCardId}
                     onArchiveCard={handleArchiveCard}
+                    onDuplicateCard={handleDuplicateCard}
                   />
                 );
               })}
