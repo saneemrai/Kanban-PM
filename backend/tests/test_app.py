@@ -1920,3 +1920,69 @@ def test_card_link_requires_session(tmp_path: Path) -> None:
     assert client.post(
         f"/api/boards/{board_id}/cards/{card_id}/links", json={"toCardId": "x"}
     ).status_code == 401
+
+
+# --- Session management tests ---
+
+def test_list_sessions_returns_current_session(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+
+    response = client.get("/api/user/sessions", headers=headers)
+
+    assert response.status_code == 200
+    sessions = response.json()
+    assert len(sessions) == 1
+    assert sessions[0]["isCurrent"] is True
+    assert "id" in sessions[0]
+    assert "createdAt" in sessions[0]
+
+
+def test_list_sessions_shows_multiple_active(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    first_headers = login(client)
+    second_headers = login(client)
+
+    first_sessions = client.get("/api/user/sessions", headers=first_headers).json()
+    second_sessions = client.get("/api/user/sessions", headers=second_headers).json()
+
+    assert len(first_sessions) == 2
+    assert len(second_sessions) == 2
+    current_first = next(s for s in first_sessions if s["isCurrent"])
+    current_second = next(s for s in second_sessions if s["isCurrent"])
+    assert current_first["id"] != current_second["id"]
+
+
+def test_revoke_session_invalidates_it(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    first_headers = login(client)
+    second_headers = login(client)
+
+    first_sessions = client.get("/api/user/sessions", headers=second_headers).json()
+    first_session_id = next(s for s in first_sessions if not s["isCurrent"])["id"]
+
+    response = client.delete(f"/api/user/sessions/{first_session_id}", headers=second_headers)
+
+    assert response.status_code == 204
+    assert client.get("/api/session", headers=first_headers).status_code == 401
+    assert client.get("/api/session", headers=second_headers).status_code == 200
+
+
+def test_revoke_session_requires_ownership(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    user_headers = login(client)
+    alice_headers = _register_and_headers(client)
+
+    user_sessions = client.get("/api/user/sessions", headers=user_headers).json()
+    user_session_id = user_sessions[0]["id"]
+
+    response = client.delete(f"/api/user/sessions/{user_session_id}", headers=alice_headers)
+
+    assert response.status_code == 404
+
+
+def test_sessions_require_session(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+
+    assert client.get("/api/user/sessions").status_code == 401
+    assert client.delete("/api/user/sessions/1").status_code == 401

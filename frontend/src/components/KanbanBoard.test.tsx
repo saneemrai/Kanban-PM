@@ -54,6 +54,15 @@ const mockBoardFetch = (board: BoardData = initialData) => {
     if (url.includes("/checklist")) {
       return Response.json([]);
     }
+    if (url === "/api/user/sessions" && init?.method === "DELETE") {
+      return new Response(null, { status: 204 });
+    }
+    if (url === "/api/user/sessions") {
+      return Response.json([{ id: 1, createdAt: new Date().toISOString(), isCurrent: true }]);
+    }
+    if (url.includes("/api/user/sessions/")) {
+      return new Response(null, { status: 204 });
+    }
     if (url.includes("/links") && init?.method === "POST") {
       return new Response(
         JSON.stringify({ blocking: [], blockedBy: [] }),
@@ -533,6 +542,16 @@ describe("KanbanBoard", () => {
     await screen.findAllByTestId(/column-/i);
 
     expect(screen.getByRole("button", { name: /export board/i })).toBeInTheDocument();
+  });
+
+  it("shows sessions tab in account modal with current session", async () => {
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getByRole("button", { name: /change password/i }));
+    await userEvent.click(screen.getByRole("button", { name: /sessions/i }));
+
+    expect(await screen.findByText("This session")).toBeInTheDocument();
   });
 
   it("shows links section in card modal", async () => {

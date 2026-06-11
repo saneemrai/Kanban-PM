@@ -35,9 +35,11 @@ from app.board_store import (
     list_card_comments,
     list_card_links,
     list_checklist_items,
+    list_sessions,
     register_user,
     rename_board,
     restore_card,
+    revoke_session,
     save_board,
     save_board_by_id,
     update_checklist_item,
@@ -321,6 +323,19 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
     ):
         username = get_username_for_session(app.state.db_path, x_pm_session)
         return delete_card_link(app.state.db_path, username, board_id, card_id, to_card_id)
+
+    @app.get("/api/user/sessions")
+    def read_sessions(x_pm_session: str | None = Header(default=None)):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        return list_sessions(app.state.db_path, username, x_pm_session or "")
+
+    @app.delete("/api/user/sessions/{session_id}", status_code=204)
+    def delete_user_session(
+        session_id: int,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        revoke_session(app.state.db_path, username, session_id)
 
     @app.post("/api/user/password")
     def update_password(

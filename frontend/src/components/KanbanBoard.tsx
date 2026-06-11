@@ -661,6 +661,7 @@ export const KanbanBoard = ({
           <ChangePasswordModal
             sessionToken={sessionToken}
             onClose={() => setIsChangingPassword(false)}
+            onSessionRevoked={onSessionExpired}
           />
         ) : null}
 

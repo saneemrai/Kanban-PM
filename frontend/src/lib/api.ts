@@ -407,6 +407,25 @@ export const deleteCardLink = async (
   return parseResponse(response);
 };
 
+export type SessionInfo = { id: number; createdAt: string; isCurrent: boolean };
+
+export const listSessions = async (sessionToken: string): Promise<SessionInfo[]> => {
+  const response = await fetch("/api/user/sessions", {
+    headers: sessionHeaders(sessionToken),
+  });
+  return parseResponse(response);
+};
+
+export const revokeSession = async (sessionToken: string, sessionId: number): Promise<void> => {
+  const response = await fetch(`/api/user/sessions/${sessionId}`, {
+    method: "DELETE",
+    headers: sessionHeaders(sessionToken),
+  });
+  if (!response.ok) {
+    throw new ApiError(`Request failed with status ${response.status}`, response.status);
+  }
+};
+
 export const sendAiChatMessage = async (
   sessionToken: string,
   boardId: number,

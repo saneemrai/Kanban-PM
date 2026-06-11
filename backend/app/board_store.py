@@ -730,6 +730,43 @@ def create_session(db_path: Path, username: str, password: str) -> str:
     return token
 
 
+def list_sessions(db_path: Path, username: str, current_token: str) -> list[dict]:
+    with connect(db_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT s.id, s.created_at, s.token = ? AS is_current
+            FROM sessions s
+            JOIN users u ON u.id = s.user_id
+            WHERE u.username = ?
+            ORDER BY s.created_at DESC
+            """,
+            (current_token, username),
+        ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "createdAt": row["created_at"],
+            "isCurrent": bool(row["is_current"]),
+        }
+        for row in rows
+    ]
+
+
+def revoke_session(db_path: Path, username: str, session_id: int) -> None:
+    with connect(db_path) as connection:
+        row = connection.execute(
+            """
+            SELECT s.id FROM sessions s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.id = ? AND u.username = ?
+            """,
+            (session_id, username),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Session not found.")
+        connection.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+
+
 def change_user_password(
     db_path: Path, username: str, current_password: str, new_password: str
 ) -> None:
