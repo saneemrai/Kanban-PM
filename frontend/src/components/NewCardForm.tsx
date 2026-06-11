@@ -1,10 +1,18 @@
 import { useState, type FormEvent } from "react";
+import type { Priority } from "@/lib/kanban";
 
-const initialFormState = { title: "", details: "" };
+const initialFormState = { title: "", details: "", dueDate: "", priority: "" as Priority | "" };
 
 type NewCardFormProps = {
-  onAdd: (title: string, details: string) => void;
+  onAdd: (title: string, details: string, dueDate?: string, priority?: Priority) => void;
 };
+
+const QUICK_PRIORITIES: { value: Priority; label: string; style: string }[] = [
+  { value: "low", label: "Low", style: "bg-[rgba(32,157,215,0.12)] text-[var(--primary-blue)]" },
+  { value: "medium", label: "Med", style: "bg-[rgba(236,173,10,0.15)] text-[#a07800]" },
+  { value: "high", label: "High", style: "bg-orange-100 text-orange-700" },
+  { value: "critical", label: "Crit", style: "bg-red-100 text-red-700" },
+];
 
 export const NewCardForm = ({ onAdd }: NewCardFormProps) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -15,7 +23,12 @@ export const NewCardForm = ({ onAdd }: NewCardFormProps) => {
     if (!formState.title.trim()) {
       return;
     }
-    onAdd(formState.title.trim(), formState.details.trim());
+    onAdd(
+      formState.title.trim(),
+      formState.details.trim(),
+      formState.dueDate || undefined,
+      formState.priority || undefined
+    );
     setFormState(initialFormState);
     setIsOpen(false);
   };
@@ -42,6 +55,37 @@ export const NewCardForm = ({ onAdd }: NewCardFormProps) => {
             rows={3}
             className="w-full resize-none rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm text-[var(--gray-text)] outline-none transition focus:border-[var(--primary-blue)]"
           />
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              type="date"
+              value={formState.dueDate}
+              onChange={(e) => setFormState((prev) => ({ ...prev, dueDate: e.target.value }))}
+              aria-label="Due date"
+              className="rounded-xl border border-[var(--stroke)] bg-white px-2 py-1.5 text-xs font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+            />
+            <div className="flex gap-1">
+              {QUICK_PRIORITIES.map((p) => (
+                <button
+                  key={p.value}
+                  type="button"
+                  onClick={() =>
+                    setFormState((prev) => ({
+                      ...prev,
+                      priority: prev.priority === p.value ? "" : p.value,
+                    }))
+                  }
+                  aria-pressed={formState.priority === p.value}
+                  className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide transition ${
+                    formState.priority === p.value
+                      ? p.style
+                      : "border border-[var(--stroke)] text-[var(--gray-text)] hover:opacity-80"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <button
               type="submit"

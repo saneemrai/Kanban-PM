@@ -356,6 +356,27 @@ describe("KanbanBoard", () => {
     expect(within(stats).getByText("8")).toBeInTheDocument();
   });
 
+  it("quick-adds a card with due date and priority", async () => {
+    const fetchMock = mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
+    const column = await screen.findByTestId("column-col-backlog");
+
+    await userEvent.click(within(column).getByRole("button", { name: /add a card/i }));
+    await userEvent.type(within(column).getByPlaceholderText(/card title/i), "Quick card");
+    await userEvent.type(within(column).getByLabelText("Due date"), "2026-12-31");
+    await userEvent.click(within(column).getByRole("button", { name: /^High$/i }));
+    await userEvent.click(within(column).getByRole("button", { name: /add card/i }));
+
+    expect(within(column).getByText("Quick card")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/boards/1/data",
+      expect.objectContaining({
+        method: "PUT",
+        body: expect.stringContaining('"due_date":"2026-12-31"'),
+      })
+    );
+  });
+
   it("archives a card via the archive button", async () => {
     mockBoardFetch();
     render(<KanbanBoard {...defaultProps} />);

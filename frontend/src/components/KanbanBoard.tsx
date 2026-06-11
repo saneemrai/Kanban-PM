@@ -214,13 +214,19 @@ export const KanbanBoard = ({
     renameTimer.current = setTimeout(() => commitBoard(nextBoard), 400);
   };
 
-  const handleAddCard = (columnId: string, title: string, details: string) => {
+  const handleAddCard = (columnId: string, title: string, details: string, dueDate?: string, priority?: Card["priority"]) => {
     const id = createId("card");
     commitBoard({
       ...board,
       cards: {
         ...board.cards,
-        [id]: { id, title, details: details || "No details yet." },
+        [id]: {
+          id,
+          title,
+          details: details || "No details yet.",
+          due_date: dueDate ?? null,
+          priority: priority ?? null,
+        },
       },
       columns: board.columns.map((column) =>
         column.id === columnId
@@ -480,7 +486,7 @@ export const KanbanBoard = ({
                     cards={visibleCards}
                     isFiltered={filteredCardIds !== null}
                     onRename={handleRenameColumn}
-                    onAddCard={handleAddCard}
+                    onAddCard={(colId, title, details, dueDate, priority) => handleAddCard(colId, title, details, dueDate, priority)}
                     onDeleteCard={handleDeleteCard}
                     onEditCard={setEditingCardId}
                     onArchiveCard={handleArchiveCard}
