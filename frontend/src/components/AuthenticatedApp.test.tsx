@@ -183,7 +183,7 @@ describe("AuthenticatedApp", () => {
     await signIn();
 
     expect(
-      await screen.findByText("Signed out because this user signed in somewhere else.")
+      await screen.findByText("Your session has expired. Please sign in again.")
     ).toBeVisible();
     expect(screen.getByRole("heading", { name: "Sign in" })).toBeVisible();
   });

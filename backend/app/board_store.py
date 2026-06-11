@@ -23,7 +23,7 @@ FIXED_COLUMN_IDS = [
     "col-done",
 ]
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 
 VALID_PRIORITIES = {"low", "medium", "high", "critical"}
@@ -280,6 +280,10 @@ def _run_migrations(connection: sqlite3.Connection) -> None:
         _migrate_to_v14(connection)
         connection.execute("UPDATE schema_version SET version = 14")
 
+    if version < 15:
+        _migrate_to_v15(connection)
+        connection.execute("UPDATE schema_version SET version = 15")
+
 
 def _migrate_to_v2(connection: sqlite3.Connection) -> None:
     connection.execute(
@@ -406,6 +410,49 @@ def _migrate_to_v4(connection: sqlite3.Connection) -> None:
     }
     if "due_date" not in card_cols:
         connection.execute("ALTER TABLE cards ADD COLUMN due_date TEXT")
+
+
+def _migrate_to_v15(connection: sqlite3.Connection) -> None:
+    """Replace single-session-per-user sessions table with multi-session."""
+    sessions_row = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='sessions'"
+    ).fetchone()
+    if sessions_row is None:
+        connection.execute(
+            """
+            CREATE TABLE sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+            """
+        )
+        return
+    sql = sessions_row["sql"] or ""
+    if "user_id INTEGER PRIMARY KEY" in sql:
+        connection.executescript(
+            """
+            PRAGMA foreign_keys = OFF;
+
+            CREATE TABLE sessions_v2 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            );
+
+            INSERT INTO sessions_v2 (user_id, token, created_at)
+            SELECT user_id, token, created_at FROM sessions;
+
+            DROP TABLE sessions;
+            ALTER TABLE sessions_v2 RENAME TO sessions;
+
+            PRAGMA foreign_keys = ON;
+            """
+        )
 
 
 def _migrate_to_v14(connection: sqlite3.Connection) -> None:
@@ -657,13 +704,7 @@ def create_session(db_path: Path, username: str, password: str) -> str:
         user_id = row["id"]
         token = uuid4().hex
         connection.execute(
-            """
-            INSERT INTO sessions (user_id, token)
-            VALUES (?, ?)
-            ON CONFLICT(user_id) DO UPDATE SET
-              token = excluded.token,
-              created_at = CURRENT_TIMESTAMP
-            """,
+            "INSERT INTO sessions (user_id, token) VALUES (?, ?)",
             (user_id, token),
         )
     return token

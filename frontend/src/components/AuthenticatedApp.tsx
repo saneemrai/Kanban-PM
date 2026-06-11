@@ -40,7 +40,7 @@ export const AuthenticatedApp = () => {
 
   const handleSessionExpired = useCallback(() => {
     clearSession();
-    setError("Signed out because this user signed in somewhere else.");
+    setError("Your session has expired. Please sign in again.");
   }, [clearSession]);
 
   const loadBoards = useCallback(

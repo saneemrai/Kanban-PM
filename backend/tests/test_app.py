@@ -246,7 +246,7 @@ def test_login_rejects_invalid_credentials(tmp_path: Path) -> None:
     assert response.status_code == 401
 
 
-def test_second_login_invalidates_first_session(tmp_path: Path) -> None:
+def test_second_login_does_not_invalidate_first_session(tmp_path: Path) -> None:
     client = make_client(tmp_path)
     first_headers = login(client)
     second_headers = login(client)
@@ -254,8 +254,19 @@ def test_second_login_invalidates_first_session(tmp_path: Path) -> None:
     first_response = client.get("/api/session", headers=first_headers)
     second_response = client.get("/api/session", headers=second_headers)
 
-    assert first_response.status_code == 401
+    assert first_response.status_code == 200
     assert second_response.status_code == 200
+
+
+def test_logout_only_invalidates_own_session(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    first_headers = login(client)
+    second_headers = login(client)
+
+    client.post("/api/logout", headers=first_headers)
+
+    assert client.get("/api/session", headers=first_headers).status_code == 401
+    assert client.get("/api/session", headers=second_headers).status_code == 200
 
 
 def test_logout_invalidates_session(tmp_path: Path) -> None:
