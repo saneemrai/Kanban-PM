@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { AuthenticatedApp } from "@/components/AuthenticatedApp";
 import { initialData } from "@/lib/kanban";
 
-const MOCK_BOARDS = [{ id: 1, title: "My Board", description: "", cardCount: 8, updatedAt: "2024-01-01" }];
+const MOCK_BOARDS = [{ id: 1, title: "My Board", description: "", cardCount: 8, overdueCount: 0, updatedAt: "2024-01-01" }];
 
 const mockFetch = (options: { loginFails?: boolean; boardsFails?: boolean } = {}) => {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -95,8 +95,8 @@ describe("AuthenticatedApp", () => {
 
   it("shows board selector when there are multiple boards", async () => {
     const multiBoards = [
-      { id: 1, title: "Board One", cardCount: 8, updatedAt: "2024-01-01" },
-      { id: 2, title: "Board Two", cardCount: 3, updatedAt: "2024-01-02" },
+      { id: 1, title: "Board One", description: "", cardCount: 8, overdueCount: 0, updatedAt: "2024-01-01" },
+      { id: 2, title: "Board Two", description: "", cardCount: 3, overdueCount: 0, updatedAt: "2024-01-02" },
     ];
     vi.stubGlobal(
       "fetch",
@@ -121,8 +121,8 @@ describe("AuthenticatedApp", () => {
 
   it("navigates to board on selection", async () => {
     const multiBoards = [
-      { id: 1, title: "Board One", cardCount: 8, updatedAt: "2024-01-01" },
-      { id: 2, title: "Board Two", cardCount: 3, updatedAt: "2024-01-02" },
+      { id: 1, title: "Board One", description: "", cardCount: 8, overdueCount: 0, updatedAt: "2024-01-01" },
+      { id: 2, title: "Board Two", description: "", cardCount: 3, overdueCount: 0, updatedAt: "2024-01-02" },
     ];
     vi.stubGlobal(
       "fetch",
@@ -146,10 +146,66 @@ describe("AuthenticatedApp", () => {
     expect(await screen.findAllByTestId(/column-/i)).toHaveLength(5);
   });
 
+  it("shows clone button on each board card", async () => {
+    const multiBoards = [
+      { id: 1, title: "Board One", description: "", cardCount: 8, overdueCount: 0, updatedAt: "2024-01-01" },
+      { id: 2, title: "Board Two", description: "", cardCount: 3, overdueCount: 0, updatedAt: "2024-01-02" },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/login") return Response.json({ username: "user", sessionToken: "session-1" });
+        if (url === "/api/boards") return Response.json(multiBoards);
+        if (url.includes("/data")) return Response.json(initialData);
+        return Response.json(initialData);
+      })
+    );
+
+    render(<AuthenticatedApp />);
+    await signIn();
+
+    await screen.findByRole("heading", { name: "My Boards" });
+    expect(screen.getAllByRole("button", { name: /clone/i })).toHaveLength(2);
+  });
+
+  it("clones a board and shows it in the list", async () => {
+    const multiBoards = [
+      { id: 1, title: "Board One", description: "", cardCount: 8, overdueCount: 0, updatedAt: "2024-01-01" },
+      { id: 2, title: "Board Two", description: "", cardCount: 2, overdueCount: 0, updatedAt: "2024-01-02" },
+    ];
+    const clonedBoard = { id: 99, title: "Copy of Board One", description: "", cardCount: 8, overdueCount: 0, updatedAt: "2024-01-01" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/login") return Response.json({ username: "user", sessionToken: "session-1" });
+        if (url === "/api/session") return Response.json({ username: "user" });
+        if (url === "/api/boards" && (!init || init.method !== "POST")) return Response.json(multiBoards);
+        if (url.includes("/clone")) return Response.json(clonedBoard, { status: 201 });
+        if (url.includes("/data")) return Response.json(initialData);
+        return Response.json(initialData);
+      })
+    );
+
+    render(<AuthenticatedApp />);
+    const user = await signIn();
+
+    await screen.findByRole("heading", { name: "My Boards" });
+    await user.click(screen.getAllByRole("button", { name: /^clone board one$/i })[0]);
+
+    const cloneInput = await screen.findByLabelText("Clone board title");
+    expect(cloneInput).toHaveValue("Copy of Board One");
+
+    await user.click(screen.getByRole("button", { name: /^clone$/i }));
+
+    expect(await screen.findByRole("heading", { name: "Copy of Board One" })).toBeVisible();
+  });
+
   it("shows search bar on board selector page", async () => {
     const multiBoards = [
-      { id: 1, title: "Board One", description: "", cardCount: 8, updatedAt: "2024-01-01" },
-      { id: 2, title: "Board Two", description: "", cardCount: 3, updatedAt: "2024-01-02" },
+      { id: 1, title: "Board One", description: "", cardCount: 8, overdueCount: 0, updatedAt: "2024-01-01" },
+      { id: 2, title: "Board Two", description: "", cardCount: 3, overdueCount: 0, updatedAt: "2024-01-02" },
     ];
     vi.stubGlobal(
       "fetch",
@@ -171,8 +227,8 @@ describe("AuthenticatedApp", () => {
 
   it("shows search results when typing in search bar", async () => {
     const multiBoards = [
-      { id: 1, title: "Board One", description: "", cardCount: 8, updatedAt: "2024-01-01" },
-      { id: 2, title: "Board Two", description: "", cardCount: 3, updatedAt: "2024-01-02" },
+      { id: 1, title: "Board One", description: "", cardCount: 8, overdueCount: 0, updatedAt: "2024-01-01" },
+      { id: 2, title: "Board Two", description: "", cardCount: 3, overdueCount: 0, updatedAt: "2024-01-02" },
     ];
     const searchResults = [
       { type: "card", boardId: 1, boardTitle: "Board One", cardId: "c1", cardTitle: "Fix the bug", cardDetails: "Details here", columnTitle: "Backlog" },
@@ -201,8 +257,8 @@ describe("AuthenticatedApp", () => {
 
   it("navigates to board when clicking a search result", async () => {
     const multiBoards = [
-      { id: 1, title: "Board One", description: "", cardCount: 8, updatedAt: "2024-01-01" },
-      { id: 2, title: "Board Two", description: "", cardCount: 3, updatedAt: "2024-01-02" },
+      { id: 1, title: "Board One", description: "", cardCount: 8, overdueCount: 0, updatedAt: "2024-01-01" },
+      { id: 2, title: "Board Two", description: "", cardCount: 3, overdueCount: 0, updatedAt: "2024-01-02" },
     ];
     const searchResults = [
       { type: "board", boardId: 2, boardTitle: "Board Two", cardId: null, cardTitle: null, cardDetails: null, columnTitle: null },

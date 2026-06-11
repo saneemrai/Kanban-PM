@@ -14,6 +14,7 @@ from app.board_store import (
     RegisterPayload,
     add_board_label,
     add_card_comment,
+    clone_board,
     add_card_link,
     add_checklist_item,
     archive_card,
@@ -88,6 +89,18 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
     def read_session(x_pm_session: str | None = Header(default=None)):
         username = get_username_for_session(app.state.db_path, x_pm_session)
         return {"username": username}
+
+    @app.post("/api/boards/{board_id}/clone", status_code=201)
+    def clone_board_endpoint(
+        board_id: int,
+        payload: dict,
+        x_pm_session: str | None = Header(default=None),
+    ) -> BoardSummary:
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        title = payload.get("title", "").strip()
+        if not title:
+            raise HTTPException(status_code=422, detail="Board title is required.")
+        return clone_board(app.state.db_path, username, board_id, title)
 
     @app.get("/api/boards/{board_id}/labels")
     def read_board_labels(

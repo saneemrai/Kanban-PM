@@ -2117,6 +2117,85 @@ def test_board_labels_require_session(tmp_path: Path) -> None:
     assert client.get(f"/api/boards/{board_id}/labels").status_code == 401
 
 
+# --- Board clone tests ---
+
+def test_clone_board_creates_new_board(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    source_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    response = client.post(
+        f"/api/boards/{source_id}/clone",
+        json={"title": "Cloned Board"},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["title"] == "Cloned Board"
+    assert data["id"] != source_id
+
+
+def test_clone_board_copies_cards(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    source_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    source_data = client.get(f"/api/boards/{source_id}/data", headers=headers).json()
+    source_card_count = len(source_data["cards"])
+
+    cloned = client.post(f"/api/boards/{source_id}/clone", json={"title": "Clone"}, headers=headers).json()
+    cloned_data = client.get(f"/api/boards/{cloned['id']}/data", headers=headers).json()
+
+    assert len(cloned_data["cards"]) == source_card_count
+    source_titles = {c["title"] for c in source_data["cards"].values()}
+    cloned_titles = {c["title"] for c in cloned_data["cards"].values()}
+    assert source_titles == cloned_titles
+
+
+def test_clone_board_cards_have_new_ids(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    source_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    source_data = client.get(f"/api/boards/{source_id}/data", headers=headers).json()
+    source_card_ids = set(source_data["cards"].keys())
+
+    cloned = client.post(f"/api/boards/{source_id}/clone", json={"title": "Clone"}, headers=headers).json()
+    cloned_data = client.get(f"/api/boards/{cloned['id']}/data", headers=headers).json()
+    cloned_card_ids = set(cloned_data["cards"].keys())
+
+    assert source_card_ids.isdisjoint(cloned_card_ids)
+
+
+def test_clone_board_copies_labels(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    source_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    client.post(f"/api/boards/{source_id}/labels", json={"name": "Feature", "color": "purple"}, headers=headers)
+
+    cloned = client.post(f"/api/boards/{source_id}/clone", json={"title": "Clone"}, headers=headers).json()
+    cloned_labels = client.get(f"/api/boards/{cloned['id']}/labels", headers=headers).json()
+
+    assert any(l["name"] == "Feature" and l["color"] == "purple" for l in cloned_labels)
+
+
+def test_clone_board_requires_title(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    source_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    response = client.post(f"/api/boards/{source_id}/clone", json={"title": ""}, headers=headers)
+
+    assert response.status_code == 422
+
+
+def test_clone_board_requires_session(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    assert client.post(f"/api/boards/{board_id}/clone", json={"title": "x"}).status_code == 401
+
+
 def test_search_requires_session(tmp_path: Path) -> None:
     client = make_client(tmp_path)
 

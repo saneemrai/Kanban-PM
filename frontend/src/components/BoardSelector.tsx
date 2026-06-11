@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ApiError, BOARD_TEMPLATES, createBoard, deleteBoard, searchAll, updateBoardMeta, type BoardSummary, type BoardTemplate, type SearchResult } from "@/lib/api";
+import { ApiError, BOARD_TEMPLATES, cloneBoard, createBoard, deleteBoard, searchAll, updateBoardMeta, type BoardSummary, type BoardTemplate, type SearchResult } from "@/lib/api";
 
 type BoardSelectorProps = {
   sessionToken: string;
@@ -33,6 +33,9 @@ export const BoardSelector = ({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editState, setEditState] = useState<EditState>({ title: "", description: "" });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [cloningId, setCloningId] = useState<number | null>(null);
+  const [cloneInputId, setCloneInputId] = useState<number | null>(null);
+  const [cloneTitle, setCloneTitle] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -127,6 +130,35 @@ export const BoardSelector = ({
       }
     } finally {
       setIsSavingEdit(false);
+    }
+  };
+
+  const startClone = (board: BoardSummary) => {
+    setCloneInputId(board.id);
+    setCloneTitle(`Copy of ${board.title}`);
+  };
+
+  const cancelClone = () => {
+    setCloneInputId(null);
+    setCloneTitle("");
+  };
+
+  const handleClone = async (boardId: number) => {
+    const title = cloneTitle.trim();
+    if (!title || cloningId !== null) return;
+    setCloningId(boardId);
+    try {
+      const created = await cloneBoard(sessionToken, boardId, title);
+      onBoardsChanged([...boards, created]);
+      setCloneInputId(null);
+      setCloneTitle("");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        onSessionExpired();
+        return;
+      }
+    } finally {
+      setCloningId(null);
     }
   };
 
@@ -292,6 +324,17 @@ export const BoardSelector = ({
                           <path d="M9.5 2.5l2 2L4 12H2v-2L9.5 2.5z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
                         </svg>
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => startClone(board)}
+                        aria-label={`Clone ${board.title}`}
+                        className="rounded-lg p-1.5 text-[var(--gray-text)] opacity-0 transition hover:bg-[var(--surface)] hover:text-[var(--accent-yellow)] group-hover:opacity-100"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                          <rect x="4" y="4" width="9" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+                          <path d="M2 10V2a1 1 0 0 1 1-1h8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                        </svg>
+                      </button>
                       {boards.length > 1 ? (
                         <button
                           type="button"
@@ -308,6 +351,40 @@ export const BoardSelector = ({
                     </div>
                   </div>
 
+                  {cloneInputId === board.id ? (
+                    <div className="flex flex-col gap-2">
+                      <input
+                        value={cloneTitle}
+                        onChange={(e) => setCloneTitle(e.target.value)}
+                        maxLength={80}
+                        aria-label="Clone board title"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleClone(board.id);
+                          if (e.key === "Escape") cancelClone();
+                        }}
+                        className="w-full border border-[var(--stroke)] px-3 py-2 text-sm font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--accent-yellow)]"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleClone(board.id)}
+                          disabled={!cloneTitle.trim() || cloningId === board.id}
+                          className="flex-1 rounded-full bg-[var(--accent-yellow)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:brightness-110 disabled:opacity-50"
+                        >
+                          {cloningId === board.id ? "Cloning..." : "Clone"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelClone}
+                          className="rounded-full border border-[var(--stroke)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)] transition hover:bg-[var(--surface)]"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-yellow)]" />
                     <span className="text-xs font-medium text-[var(--gray-text)]">
@@ -320,13 +397,15 @@ export const BoardSelector = ({
                     ) : null}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => onSelectBoard(board.id)}
-                    className="mt-auto w-full rounded-full bg-[var(--primary-blue)] px-4 py-2.5 text-sm font-semibold uppercase tracking-wide text-white transition hover:brightness-110"
-                  >
-                    Open board
-                  </button>
+                  {cloneInputId !== board.id ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelectBoard(board.id)}
+                      className="mt-auto w-full rounded-full bg-[var(--primary-blue)] px-4 py-2.5 text-sm font-semibold uppercase tracking-wide text-white transition hover:brightness-110"
+                    >
+                      Open board
+                    </button>
+                  ) : null}
                 </>
               )}
             </div>

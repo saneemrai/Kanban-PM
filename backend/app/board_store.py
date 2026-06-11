@@ -897,6 +897,68 @@ def create_board(db_path: Path, username: str, title: str, template: str = "defa
     )
 
 
+def clone_board(db_path: Path, username: str, source_board_id: int, new_title: str) -> BoardSummary:
+    new_title = new_title.strip()
+    if not new_title:
+        raise HTTPException(status_code=422, detail="Board title is required.")
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, source_board_id)
+
+        src = connection.execute(
+            "SELECT user_id, description FROM boards WHERE id = ?", (source_board_id,)
+        ).fetchone()
+        user_id = src["user_id"]
+        description = src["description"] or ""
+
+        cursor = connection.execute(
+            "INSERT INTO boards (user_id, title, description) VALUES (?, ?, ?)",
+            (user_id, new_title, description),
+        )
+        new_board_id = cursor.lastrowid
+
+        columns = connection.execute(
+            "SELECT key, title, position, wip_limit FROM columns WHERE board_id = ? ORDER BY position",
+            (source_board_id,),
+        ).fetchall()
+        for col in columns:
+            connection.execute(
+                "INSERT INTO columns (board_id, key, title, position, wip_limit) VALUES (?, ?, ?, ?, ?)",
+                (new_board_id, col["key"], col["title"], col["position"], col["wip_limit"]),
+            )
+
+        cards = connection.execute(
+            "SELECT id, column_key, title, details, priority, due_date, labels, estimate, assignee, color, position FROM cards WHERE board_id = ? AND archived = 0",
+            (source_board_id,),
+        ).fetchall()
+        id_map: dict[str, str] = {}
+        for card in cards:
+            new_id = f"card-{uuid4().hex[:8]}"
+            id_map[card["id"]] = new_id
+            connection.execute(
+                "INSERT INTO cards (id, board_id, column_key, title, details, priority, due_date, labels, estimate, assignee, color, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (new_id, new_board_id, card["column_key"], card["title"], card["details"], card["priority"], card["due_date"], card["labels"], card["estimate"], card["assignee"], card["color"], card["position"]),
+            )
+
+        labels = connection.execute(
+            "SELECT name, color FROM board_labels WHERE board_id = ?", (source_board_id,)
+        ).fetchall()
+        for lbl in labels:
+            connection.execute(
+                "INSERT INTO board_labels (board_id, name, color) VALUES (?, ?, ?)",
+                (new_board_id, lbl["name"], lbl["color"]),
+            )
+
+        card_count = len(cards)
+    return BoardSummary(
+        id=new_board_id,
+        title=new_title,
+        description=description,
+        cardCount=card_count,
+        overdueCount=0,
+        updatedAt=datetime.now().isoformat(),
+    )
+
+
 def rename_board(db_path: Path, username: str, board_id: int, title: str, description: str | None = None) -> None:
     title = title.strip()
     if not title:

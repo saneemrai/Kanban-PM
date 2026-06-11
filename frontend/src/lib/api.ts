@@ -485,6 +485,19 @@ export type SearchResult = {
   columnTitle: string | null;
 };
 
+export const cloneBoard = async (
+  sessionToken: string,
+  boardId: number,
+  title: string
+): Promise<BoardSummary> => {
+  const response = await fetch(`/api/boards/${boardId}/clone`, {
+    method: "POST",
+    headers: { ...sessionHeaders(sessionToken), "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  return parseResponse(response);
+};
+
 export const searchAll = async (
   sessionToken: string,
   query: string
