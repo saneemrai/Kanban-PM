@@ -20,6 +20,7 @@ export type Column = {
   id: string;
   title: string;
   cardIds: string[];
+  wip_limit?: number | null;
 };
 
 export type BoardData = {

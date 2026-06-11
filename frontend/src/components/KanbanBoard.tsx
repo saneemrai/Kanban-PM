@@ -283,6 +283,15 @@ export const KanbanBoard = ({
     });
   };
 
+  const handleSetWipLimit = (columnId: string, limit: number | null) => {
+    commitBoard({
+      ...board,
+      columns: board.columns.map((col) =>
+        col.id === columnId ? { ...col, wip_limit: limit } : col
+      ),
+    });
+  };
+
   const handleDuplicateCard = (columnId: string, cardId: string) => {
     const source = board.cards[cardId];
     if (!source) return;
@@ -530,6 +539,7 @@ export const KanbanBoard = ({
                     onEditCard={setEditingCardId}
                     onArchiveCard={handleArchiveCard}
                     onDuplicateCard={handleDuplicateCard}
+                    onSetWipLimit={handleSetWipLimit}
                   />
                 );
               })}

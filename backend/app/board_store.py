@@ -23,7 +23,7 @@ FIXED_COLUMN_IDS = [
     "col-done",
 ]
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 
 VALID_PRIORITIES = {"low", "medium", "high", "critical"}
@@ -46,6 +46,7 @@ class Column(BaseModel):
     id: str
     title: str
     cardIds: list[str]
+    wip_limit: int | None = None
 
 
 class BoardData(BaseModel):
@@ -220,6 +221,10 @@ def _run_migrations(connection: sqlite3.Connection) -> None:
         _migrate_to_v9(connection)
         connection.execute("UPDATE schema_version SET version = 9")
 
+    if version < 10:
+        _migrate_to_v10(connection)
+        connection.execute("UPDATE schema_version SET version = 10")
+
 
 def _migrate_to_v2(connection: sqlite3.Connection) -> None:
     connection.execute(
@@ -346,6 +351,15 @@ def _migrate_to_v4(connection: sqlite3.Connection) -> None:
     }
     if "due_date" not in card_cols:
         connection.execute("ALTER TABLE cards ADD COLUMN due_date TEXT")
+
+
+def _migrate_to_v10(connection: sqlite3.Connection) -> None:
+    col_cols = {
+        r["name"]
+        for r in connection.execute("PRAGMA table_info(columns)").fetchall()
+    }
+    if "wip_limit" not in col_cols:
+        connection.execute("ALTER TABLE columns ADD COLUMN wip_limit INTEGER")
 
 
 def _migrate_to_v9(connection: sqlite3.Connection) -> None:
@@ -729,10 +743,10 @@ def save_board_by_id(
             connection.execute(
                 """
                 UPDATE columns
-                SET title = ?, position = ?, updated_at = CURRENT_TIMESTAMP
+                SET title = ?, position = ?, wip_limit = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE board_id = ? AND key = ?
                 """,
-                (column.title, position, board_id, column.id),
+                (column.title, position, column.wip_limit, board_id, column.id),
             )
         connection.execute(
             "DELETE FROM cards WHERE board_id = ? AND archived = 0", (board_id,)
@@ -776,7 +790,7 @@ def save_board(db_path: Path, username: str, payload: dict[str, Any]) -> BoardDa
 def _load_board_data(db_path: Path, board_id: int) -> BoardData:
     with connect(db_path) as connection:
         columns = connection.execute(
-            "SELECT key, title FROM columns WHERE board_id = ? ORDER BY position",
+            "SELECT key, title, wip_limit FROM columns WHERE board_id = ? ORDER BY position",
             (board_id,),
         ).fetchall()
         cards = connection.execute(
@@ -808,6 +822,7 @@ def _load_board_data(db_path: Path, board_id: int) -> BoardData:
                 id=col["key"],
                 title=col["title"],
                 cardIds=cards_by_column[col["key"]],
+                wip_limit=col["wip_limit"],
             )
             for col in columns
         ],
@@ -885,6 +900,10 @@ def parse_and_validate_board(payload: dict[str, Any]) -> BoardData:
     for column in board.columns:
         if not column.title.strip():
             raise HTTPException(status_code=422, detail="Column title is required.")
+        if column.wip_limit is not None and column.wip_limit < 1:
+            raise HTTPException(
+                status_code=422, detail="WIP limit must be a positive integer."
+            )
         for card_id in column.cardIds:
             if card_id in seen_card_ids:
                 raise HTTPException(

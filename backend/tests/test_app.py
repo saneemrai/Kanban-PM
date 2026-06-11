@@ -1377,3 +1377,84 @@ def test_checklist_requires_session(tmp_path: Path) -> None:
 
     assert client.get(f"/api/boards/{board_id}/cards/{card_id}/checklist").status_code == 401
     assert client.post(f"/api/boards/{board_id}/cards/{card_id}/checklist", json={"text": "x"}).status_code == 401
+
+
+# --- WIP limit tests ---
+
+def test_wip_limit_defaults_to_null(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    for col in board["columns"]:
+        assert col["wip_limit"] is None
+
+
+def test_wip_limit_saves_and_loads(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["columns"][0]["wip_limit"] = 3
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    assert response.status_code == 200
+    updated = response.json()
+    assert updated["columns"][0]["wip_limit"] == 3
+    assert updated["columns"][1]["wip_limit"] is None
+
+
+def test_wip_limit_can_be_cleared(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["columns"][0]["wip_limit"] = 5
+    client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    board["columns"][0]["wip_limit"] = None
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["columns"][0]["wip_limit"] is None
+
+
+def test_wip_limit_rejects_zero(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["columns"][0]["wip_limit"] = 0
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    assert response.status_code == 422
+
+
+def test_wip_limit_rejects_negative(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["columns"][0]["wip_limit"] = -1
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    assert response.status_code == 422
+
+
+def test_wip_limit_persists_across_reload(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["columns"][2]["wip_limit"] = 2
+    client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    reloaded = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+    assert reloaded["columns"][2]["wip_limit"] == 2

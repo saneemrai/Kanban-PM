@@ -469,4 +469,33 @@ describe("KanbanBoard", () => {
 
     expect(await screen.findByText("Looks great!")).toBeInTheDocument();
   });
+
+  it("shows wip limit count in column header when set", async () => {
+    const boardWithLimit = {
+      ...initialData,
+      columns: initialData.columns.map((c, i) =>
+        i === 0 ? { ...c, wip_limit: 5 } : c
+      ),
+    };
+    mockBoardFetch(boardWithLimit);
+    render(<KanbanBoard {...defaultProps} />);
+
+    const column = await screen.findByTestId("column-col-backlog");
+    expect(within(column).getByText(/2 \/ 5/i)).toBeInTheDocument();
+  });
+
+  it("shows over-limit warning when cards exceed wip limit", async () => {
+    const boardOverLimit = {
+      ...initialData,
+      columns: initialData.columns.map((c, i) =>
+        i === 0 ? { ...c, wip_limit: 1 } : c
+      ),
+    };
+    mockBoardFetch(boardOverLimit);
+    render(<KanbanBoard {...defaultProps} />);
+
+    const column = await screen.findByTestId("column-col-backlog");
+    expect(within(column).getByText(/over/i)).toBeInTheDocument();
+    expect(within(column).getByText(/2 \/ 1/i)).toBeInTheDocument();
+  });
 });
