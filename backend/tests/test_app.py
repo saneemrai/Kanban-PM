@@ -789,3 +789,50 @@ def test_schema_migration_from_v1_to_v2(tmp_path: Path) -> None:
 
     board = get_board(db_path, "user")
     assert len(board.columns) == 5
+
+
+def test_card_labels_roundtrip(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["cards"]["card-1"]["labels"] = ["bug", "urgent"]
+
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["cards"]["card-1"]["labels"] == ["bug", "urgent"]
+
+
+def test_card_labels_default_to_empty_list(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    assert board["cards"]["card-1"]["labels"] == []
+
+
+def test_card_labels_rejects_more_than_ten(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["cards"]["card-1"]["labels"] = [str(i) for i in range(11)]
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    assert response.status_code == 422
+
+
+def test_card_labels_rejects_label_over_30_chars(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id = client.get("/api/boards", headers=headers).json()[0]["id"]
+    board = client.get(f"/api/boards/{board_id}/data", headers=headers).json()
+
+    board["cards"]["card-1"]["labels"] = ["x" * 31]
+    response = client.put(f"/api/boards/{board_id}/data", json=board, headers=headers)
+
+    assert response.status_code == 422

@@ -1,4 +1,5 @@
 import hashlib
+import json
 import secrets
 from datetime import datetime
 from pathlib import Path
@@ -22,7 +23,7 @@ FIXED_COLUMN_IDS = [
     "col-done",
 ]
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 VALID_PRIORITIES = {"low", "medium", "high", "critical"}
@@ -36,6 +37,7 @@ class Card(BaseModel):
     details: str
     priority: str | None = None
     due_date: str | None = None
+    labels: list[str] = []
 
 
 class Column(BaseModel):
@@ -191,6 +193,10 @@ def _run_migrations(connection: sqlite3.Connection) -> None:
         _migrate_to_v4(connection)
         connection.execute("UPDATE schema_version SET version = 4")
 
+    if version < 5:
+        _migrate_to_v5(connection)
+        connection.execute("UPDATE schema_version SET version = 5")
+
 
 def _migrate_to_v2(connection: sqlite3.Connection) -> None:
     connection.execute(
@@ -317,6 +323,17 @@ def _migrate_to_v4(connection: sqlite3.Connection) -> None:
     }
     if "due_date" not in card_cols:
         connection.execute("ALTER TABLE cards ADD COLUMN due_date TEXT")
+
+
+def _migrate_to_v5(connection: sqlite3.Connection) -> None:
+    card_cols = {
+        r["name"]
+        for r in connection.execute("PRAGMA table_info(cards)").fetchall()
+    }
+    if "labels" not in card_cols:
+        connection.execute(
+            "ALTER TABLE cards ADD COLUMN labels TEXT NOT NULL DEFAULT '[]'"
+        )
 
 
 def _boards_has_unique_user_id(sql: str) -> bool:
@@ -617,7 +634,7 @@ def _load_board_data(db_path: Path, board_id: int) -> BoardData:
         ).fetchall()
         cards = connection.execute(
             """
-            SELECT id, column_key, title, details, priority, due_date
+            SELECT id, column_key, title, details, priority, due_date, labels
             FROM cards
             WHERE board_id = ?
             ORDER BY column_key, position
@@ -635,6 +652,7 @@ def _load_board_data(db_path: Path, board_id: int) -> BoardData:
             details=card["details"],
             priority=card["priority"],
             due_date=card["due_date"],
+            labels=json.loads(card["labels"] or "[]"),
         )
 
     return BoardData(
@@ -696,10 +714,10 @@ def insert_board_cards(
             card = board.cards[card_id]
             connection.execute(
                 """
-                INSERT INTO cards (id, board_id, column_key, title, details, position, priority, due_date)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO cards (id, board_id, column_key, title, details, position, priority, due_date, labels)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (card.id, board_id, column.id, card.title, card.details, position, card.priority, card.due_date),
+                (card.id, board_id, column.id, card.title, card.details, position, card.priority, card.due_date, json.dumps(card.labels)),
             )
 
 
@@ -760,5 +778,19 @@ def parse_and_validate_board(payload: dict[str, Any]) -> BoardData:
                     status_code=422,
                     detail=f"Invalid due_date '{card.due_date}'. Must be YYYY-MM-DD.",
                 ) from error
+        if len(card.labels) > 10:
+            raise HTTPException(
+                status_code=422, detail="A card may have at most 10 labels."
+            )
+        for label in card.labels:
+            if not isinstance(label, str) or not label.strip():
+                raise HTTPException(
+                    status_code=422, detail="Labels must be non-empty strings."
+                )
+            if len(label) > 30:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Each label must be 30 characters or fewer.",
+                )
 
     return board

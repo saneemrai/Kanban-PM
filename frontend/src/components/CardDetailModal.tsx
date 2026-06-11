@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useRef, type FormEvent, type KeyboardEvent } from "react";
 import type { Card, Priority } from "@/lib/kanban";
 
 const PRIORITIES: { value: Priority; label: string }[] = [
@@ -17,9 +17,23 @@ const PRIORITY_ACTIVE: Record<Priority, string> = {
   critical: "bg-red-600 text-white",
 };
 
+const LABEL_COLORS = [
+  "bg-[rgba(32,157,215,0.15)] text-[var(--primary-blue)]",
+  "bg-[rgba(117,57,145,0.15)] text-[var(--secondary-purple)]",
+  "bg-orange-100 text-orange-700",
+  "bg-green-100 text-green-700",
+  "bg-pink-100 text-pink-700",
+  "bg-teal-100 text-teal-700",
+];
+
+const labelColor = (label: string) =>
+  LABEL_COLORS[
+    label.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % LABEL_COLORS.length
+  ];
+
 type CardDetailModalProps = {
   card: Card;
-  onSave: (updates: Pick<Card, "title" | "details" | "priority" | "due_date">) => void;
+  onSave: (updates: Pick<Card, "title" | "details" | "priority" | "due_date" | "labels">) => void;
   onClose: () => void;
 };
 
@@ -28,10 +42,31 @@ export const CardDetailModal = ({ card, onSave, onClose }: CardDetailModalProps)
   const [details, setDetails] = useState(card.details);
   const [priority, setPriority] = useState<Priority | null>(card.priority ?? null);
   const [dueDate, setDueDate] = useState(card.due_date ?? "");
+  const [labels, setLabels] = useState<string[]>(card.labels ?? []);
+  const [labelInput, setLabelInput] = useState("");
+  const labelInputRef = useRef<HTMLInputElement>(null);
+
+  const addLabel = (raw: string) => {
+    const label = raw.trim().slice(0, 30);
+    if (label && !labels.includes(label) && labels.length < 10) {
+      setLabels([...labels, label]);
+    }
+    setLabelInput("");
+  };
+
+  const handleLabelKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addLabel(labelInput);
+    } else if (e.key === "Backspace" && !labelInput && labels.length > 0) {
+      setLabels(labels.slice(0, -1));
+    }
+  };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    onSave({ title: title.trim() || card.title, details, priority, due_date: dueDate || null });
+    const finalLabels = labelInput.trim() ? [...labels, labelInput.trim().slice(0, 30)].filter((l, i, arr) => arr.indexOf(l) === i).slice(0, 10) : labels;
+    onSave({ title: title.trim() || card.title, details, priority, due_date: dueDate || null, labels: finalLabels });
     onClose();
   };
 
@@ -91,6 +126,45 @@ export const CardDetailModal = ({ card, onSave, onClose }: CardDetailModalProps)
               className="mt-2 w-full border border-[var(--stroke)] px-3 py-2.5 text-sm font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
             />
           </label>
+          <div>
+            <p className="text-sm font-semibold text-[var(--navy-dark)]">Labels</p>
+            <div
+              className="mt-2 flex min-h-[40px] flex-wrap gap-1.5 rounded border border-[var(--stroke)] px-3 py-2 transition focus-within:border-[var(--primary-blue)] cursor-text"
+              onClick={() => labelInputRef.current?.focus()}
+              aria-label="Labels"
+            >
+              {labels.map((label) => (
+                <span
+                  key={label}
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${labelColor(label)}`}
+                >
+                  {label}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLabels(labels.filter((l) => l !== label));
+                    }}
+                    aria-label={`Remove label ${label}`}
+                    className="hover:opacity-70"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                ref={labelInputRef}
+                value={labelInput}
+                onChange={(e) => setLabelInput(e.target.value)}
+                onKeyDown={handleLabelKeyDown}
+                onBlur={() => { if (labelInput.trim()) addLabel(labelInput); }}
+                placeholder={labels.length === 0 ? "Type a label and press Enter" : ""}
+                aria-label="Add label"
+                className="min-w-[120px] flex-1 bg-transparent text-sm font-medium text-[var(--navy-dark)] outline-none placeholder:text-[var(--gray-text)]"
+              />
+            </div>
+          </div>
+
           <div>
             <p className="text-sm font-semibold text-[var(--navy-dark)]">Priority</p>
             <div className="mt-2 flex flex-wrap gap-2">

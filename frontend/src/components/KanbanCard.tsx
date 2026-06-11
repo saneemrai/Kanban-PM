@@ -3,6 +3,20 @@ import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
 import type { Card, Priority } from "@/lib/kanban";
 
+const LABEL_COLORS = [
+  "bg-[rgba(32,157,215,0.15)] text-[var(--primary-blue)]",
+  "bg-[rgba(117,57,145,0.15)] text-[var(--secondary-purple)]",
+  "bg-orange-100 text-orange-700",
+  "bg-green-100 text-green-700",
+  "bg-pink-100 text-pink-700",
+  "bg-teal-100 text-teal-700",
+];
+
+const labelColor = (label: string) =>
+  LABEL_COLORS[
+    label.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % LABEL_COLORS.length
+  ];
+
 const PRIORITY_BADGE: Record<Priority, string> = {
   low: "bg-[rgba(32,157,215,0.12)] text-[var(--primary-blue)]",
   medium: "bg-[rgba(236,173,10,0.15)] text-[#a07800]",
@@ -63,6 +77,21 @@ export const KanbanCard = ({ card, onDelete, onEdit }: KanbanCardProps) => {
     >
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
+          {card.labels && card.labels.length > 0 ? (
+            <div className="mb-1.5 flex flex-wrap gap-1">
+              {card.labels.map((label) => (
+                <span
+                  key={label}
+                  className={clsx(
+                    "inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                    labelColor(label)
+                  )}
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          ) : null}
           <div className="mb-1.5 flex flex-wrap gap-1">
             {card.priority ? (
               <span

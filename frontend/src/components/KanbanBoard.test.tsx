@@ -274,6 +274,26 @@ describe("KanbanBoard", () => {
     expect(screen.getByText("Gather customer signals")).toBeInTheDocument();
   });
 
+  it("adds and displays a label on a card", async () => {
+    const fetchMock = mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getAllByRole("button", { name: /edit /i })[0]);
+    expect(screen.getByRole("dialog", { name: /edit card/i })).toBeVisible();
+
+    await userEvent.type(screen.getByLabelText("Add label"), "backend");
+    await userEvent.keyboard("{Enter}");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("backend")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/boards/1/data",
+      expect.objectContaining({ method: "PUT" })
+    );
+  });
+
   it("shows match counts per column when filter is active", async () => {
     render(<KanbanBoard {...defaultProps} />);
     await screen.findAllByTestId(/column-/i);

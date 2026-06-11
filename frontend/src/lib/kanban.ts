@@ -6,6 +6,7 @@ export type Card = {
   details: string;
   priority?: Priority | null;
   due_date?: string | null;
+  labels?: string[];
 };
 
 export type BoardSummary = {
