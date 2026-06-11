@@ -23,7 +23,7 @@ FIXED_COLUMN_IDS = [
     "col-done",
 ]
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 VALID_PRIORITIES = {"low", "medium", "high", "critical"}
@@ -216,6 +216,10 @@ def _run_migrations(connection: sqlite3.Connection) -> None:
         _migrate_to_v8(connection)
         connection.execute("UPDATE schema_version SET version = 8")
 
+    if version < 9:
+        _migrate_to_v9(connection)
+        connection.execute("UPDATE schema_version SET version = 9")
+
 
 def _migrate_to_v2(connection: sqlite3.Connection) -> None:
     connection.execute(
@@ -342,6 +346,23 @@ def _migrate_to_v4(connection: sqlite3.Connection) -> None:
     }
     if "due_date" not in card_cols:
         connection.execute("ALTER TABLE cards ADD COLUMN due_date TEXT")
+
+
+def _migrate_to_v9(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS checklist_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            board_id INTEGER NOT NULL,
+            card_id TEXT NOT NULL,
+            text TEXT NOT NULL,
+            done INTEGER NOT NULL DEFAULT 0,
+            position INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (board_id) REFERENCES boards (id)
+        )
+        """
+    )
 
 
 def _migrate_to_v8(connection: sqlite3.Connection) -> None:
@@ -920,6 +941,79 @@ def parse_and_validate_board(payload: dict[str, Any]) -> BoardData:
                 )
 
     return board
+
+
+def list_checklist_items(
+    db_path: Path, username: str, board_id: int, card_id: str
+) -> list[dict]:
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        rows = connection.execute(
+            "SELECT id, text, done FROM checklist_items WHERE board_id = ? AND card_id = ? ORDER BY position, id",
+            (board_id, card_id),
+        ).fetchall()
+    return [{"id": row["id"], "text": row["text"], "done": bool(row["done"])} for row in rows]
+
+
+def add_checklist_item(
+    db_path: Path, username: str, board_id: int, card_id: str, text: str
+) -> dict:
+    text = text.strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="Item text is required.")
+    if len(text) > 200:
+        raise HTTPException(status_code=422, detail="Item text must be 200 characters or fewer.")
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        card_exists = connection.execute(
+            "SELECT 1 FROM cards WHERE board_id = ? AND id = ?", (board_id, card_id)
+        ).fetchone()
+        if card_exists is None:
+            raise HTTPException(status_code=404, detail="Card not found.")
+        max_pos = connection.execute(
+            "SELECT COALESCE(MAX(position), -1) + 1 AS pos FROM checklist_items WHERE board_id = ? AND card_id = ?",
+            (board_id, card_id),
+        ).fetchone()["pos"]
+        connection.execute(
+            "INSERT INTO checklist_items (board_id, card_id, text, position) VALUES (?, ?, ?, ?)",
+            (board_id, card_id, text, max_pos),
+        )
+        row = connection.execute(
+            "SELECT id, text, done FROM checklist_items WHERE id = last_insert_rowid()"
+        ).fetchone()
+    return {"id": row["id"], "text": row["text"], "done": bool(row["done"])}
+
+
+def update_checklist_item(
+    db_path: Path, username: str, board_id: int, item_id: int, done: bool
+) -> dict:
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        row = connection.execute(
+            "SELECT id, text, done FROM checklist_items WHERE id = ? AND board_id = ?",
+            (item_id, board_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Checklist item not found.")
+        connection.execute(
+            "UPDATE checklist_items SET done = ? WHERE id = ?",
+            (1 if done else 0, item_id),
+        )
+    return {"id": row["id"], "text": row["text"], "done": done}
+
+
+def delete_checklist_item(
+    db_path: Path, username: str, board_id: int, item_id: int
+) -> None:
+    with connect(db_path) as connection:
+        _verify_board_ownership(connection, username, board_id)
+        row = connection.execute(
+            "SELECT id FROM checklist_items WHERE id = ? AND board_id = ?",
+            (item_id, board_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Checklist item not found.")
+        connection.execute("DELETE FROM checklist_items WHERE id = ?", (item_id,))
 
 
 def list_card_comments(

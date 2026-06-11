@@ -2,7 +2,17 @@
 
 import { useState, useRef, useEffect, type FormEvent, type KeyboardEvent } from "react";
 import type { Card, Priority } from "@/lib/kanban";
-import { addComment, deleteComment, listComments, type Comment } from "@/lib/api";
+import {
+  addComment,
+  addChecklistItem,
+  deleteComment,
+  deleteChecklistItem,
+  listComments,
+  listChecklist,
+  toggleChecklistItem,
+  type ChecklistItem,
+  type Comment,
+} from "@/lib/api";
 
 const PRIORITIES: { value: Priority; label: string }[] = [
   { value: "low", label: "Low" },
@@ -67,11 +77,50 @@ export const CardDetailModal = ({
   const [labelInput, setLabelInput] = useState("");
   const labelInputRef = useRef<HTMLInputElement>(null);
 
+  const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
+  const [newItemText, setNewItemText] = useState("");
+
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentBody, setCommentBody] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [commentError, setCommentError] = useState("");
   const commentsEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    listChecklist(sessionToken, boardId, card.id)
+      .then(setChecklist)
+      .catch(() => {});
+  }, [sessionToken, boardId, card.id]);
+
+  const handleAddChecklistItem = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!newItemText.trim()) return;
+    try {
+      const item = await addChecklistItem(sessionToken, boardId, card.id, newItemText);
+      setChecklist((prev) => [...prev, item]);
+      setNewItemText("");
+    } catch {
+      // silently fail — user sees no change
+    }
+  };
+
+  const handleToggleItem = async (itemId: number, done: boolean) => {
+    try {
+      const updated = await toggleChecklistItem(sessionToken, boardId, itemId, done);
+      setChecklist((prev) => prev.map((i) => (i.id === itemId ? updated : i)));
+    } catch {
+      // revert optimistic update (no-op here since we don't do optimistic)
+    }
+  };
+
+  const handleDeleteItem = async (itemId: number) => {
+    try {
+      await deleteChecklistItem(sessionToken, boardId, itemId);
+      setChecklist((prev) => prev.filter((i) => i.id !== itemId));
+    } catch {
+      // silently fail
+    }
+  };
 
   useEffect(() => {
     listComments(sessionToken, boardId, card.id)
@@ -275,6 +324,77 @@ export const CardDetailModal = ({
               </button>
             </div>
           </form>
+
+          <section
+            aria-label="Checklist"
+            className="border-t border-[var(--stroke)] px-6 pb-2 pt-5"
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-[var(--navy-dark)]">
+                Checklist
+                {checklist.length > 0 ? (
+                  <span className="ml-2 text-xs font-normal text-[var(--gray-text)]">
+                    {checklist.filter((i) => i.done).length}/{checklist.length}
+                  </span>
+                ) : null}
+              </p>
+            </div>
+            {checklist.length > 0 ? (
+              <>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--stroke)]">
+                  <div
+                    className="h-full rounded-full bg-[var(--primary-blue)] transition-all duration-300"
+                    style={{ width: `${Math.round((checklist.filter((i) => i.done).length / checklist.length) * 100)}%` }}
+                  />
+                </div>
+                <ul className="mt-3 space-y-1">
+                  {checklist.map((item) => (
+                    <li
+                      key={item.id}
+                      className="group flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--surface)] transition"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={item.done}
+                        onChange={(e) => handleToggleItem(item.id, e.target.checked)}
+                        aria-label={item.text}
+                        className="shrink-0 accent-[var(--primary-blue)]"
+                      />
+                      <span className={`flex-1 text-sm ${item.done ? "line-through text-[var(--gray-text)]" : "text-[var(--navy-dark)]"}`}>
+                        {item.text}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteItem(item.id)}
+                        aria-label={`Delete checklist item ${item.text}`}
+                        className="shrink-0 rounded p-1 text-[var(--gray-text)] opacity-0 transition hover:text-red-600 group-hover:opacity-100"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                          <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+            <form onSubmit={handleAddChecklistItem} className="mt-2 flex gap-2">
+              <input
+                value={newItemText}
+                onChange={(e) => setNewItemText(e.target.value)}
+                placeholder="Add a checklist item…"
+                aria-label="Add checklist item"
+                className="flex-1 rounded border border-[var(--stroke)] px-3 py-2 text-sm font-medium text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+              />
+              <button
+                type="submit"
+                disabled={!newItemText.trim()}
+                className="rounded-full bg-[var(--primary-blue)] px-3 py-2 text-xs font-semibold text-white transition hover:brightness-110 disabled:opacity-40"
+              >
+                Add
+              </button>
+            </form>
+          </section>
 
           <section
             aria-label="Comments"

@@ -1256,3 +1256,124 @@ def test_archive_requires_session(tmp_path: Path) -> None:
 
     assert client.post(f"/api/boards/{board_id}/cards/{card_id}/archive").status_code == 401
     assert client.get(f"/api/boards/{board_id}/archive").status_code == 401
+
+
+# --- Checklist tests ---
+
+def test_checklist_empty_initially(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+
+    response = client.get(
+        f"/api/boards/{board_id}/cards/{card_id}/checklist", headers=headers
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_add_checklist_item_returns_item(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+
+    response = client.post(
+        f"/api/boards/{board_id}/cards/{card_id}/checklist",
+        json={"text": "Write unit tests"},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["text"] == "Write unit tests"
+    assert data["done"] is False
+    assert "id" in data
+
+
+def test_checklist_list_shows_items(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+    client.post(f"/api/boards/{board_id}/cards/{card_id}/checklist", json={"text": "First"}, headers=headers)
+    client.post(f"/api/boards/{board_id}/cards/{card_id}/checklist", json={"text": "Second"}, headers=headers)
+
+    items = client.get(f"/api/boards/{board_id}/cards/{card_id}/checklist", headers=headers).json()
+
+    assert len(items) == 2
+    assert items[0]["text"] == "First"
+    assert items[1]["text"] == "Second"
+
+
+def test_toggle_checklist_item_marks_done(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+    item_id = client.post(
+        f"/api/boards/{board_id}/cards/{card_id}/checklist",
+        json={"text": "Todo"},
+        headers=headers,
+    ).json()["id"]
+
+    response = client.patch(
+        f"/api/boards/{board_id}/checklist/{item_id}",
+        json={"done": True},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["done"] is True
+
+
+def test_delete_checklist_item_removes_it(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+    item_id = client.post(
+        f"/api/boards/{board_id}/cards/{card_id}/checklist",
+        json={"text": "Delete me"},
+        headers=headers,
+    ).json()["id"]
+
+    response = client.delete(f"/api/boards/{board_id}/checklist/{item_id}", headers=headers)
+    items = client.get(f"/api/boards/{board_id}/cards/{card_id}/checklist", headers=headers).json()
+
+    assert response.status_code == 204
+    assert items == []
+
+
+def test_checklist_rejects_empty_text(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+
+    response = client.post(
+        f"/api/boards/{board_id}/cards/{card_id}/checklist",
+        json={"text": "  "},
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_checklist_rejects_text_over_200_chars(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+
+    response = client.post(
+        f"/api/boards/{board_id}/cards/{card_id}/checklist",
+        json={"text": "x" * 201},
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_checklist_requires_session(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    headers = login(client)
+    board_id, card_id = _board_and_card(client, headers)
+
+    assert client.get(f"/api/boards/{board_id}/cards/{card_id}/checklist").status_code == 401
+    assert client.post(f"/api/boards/{board_id}/cards/{card_id}/checklist", json={"text": "x"}).status_code == 401

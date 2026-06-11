@@ -13,6 +13,7 @@ from app.board_store import (
     LoginPayload,
     RegisterPayload,
     add_card_comment,
+    add_checklist_item,
     archive_card,
     change_user_password,
     connect as db_connect,
@@ -20,6 +21,7 @@ from app.board_store import (
     create_session,
     delete_board,
     delete_card_comment,
+    delete_checklist_item,
     delete_session,
     get_board,
     get_board_by_id,
@@ -29,11 +31,13 @@ from app.board_store import (
     list_archived_cards,
     list_boards,
     list_card_comments,
+    list_checklist_items,
     register_user,
     rename_board,
     restore_card,
     save_board,
     save_board_by_id,
+    update_checklist_item,
     _get_first_board_id,
 )
 
@@ -205,6 +209,47 @@ def create_app(static_dir: Path = STATIC_DIR, db_path: Path = DEFAULT_DB_PATH) -
     ):
         username = get_username_for_session(app.state.db_path, x_pm_session)
         return restore_card(app.state.db_path, username, board_id, card_id).model_dump()
+
+    @app.get("/api/boards/{board_id}/cards/{card_id}/checklist")
+    def read_checklist(
+        board_id: int,
+        card_id: str,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        return list_checklist_items(app.state.db_path, username, board_id, card_id)
+
+    @app.post("/api/boards/{board_id}/cards/{card_id}/checklist", status_code=201)
+    def create_checklist_item(
+        board_id: int,
+        card_id: str,
+        payload: dict,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        return add_checklist_item(
+            app.state.db_path, username, board_id, card_id, payload.get("text", "")
+        )
+
+    @app.patch("/api/boards/{board_id}/checklist/{item_id}")
+    def toggle_checklist_item(
+        board_id: int,
+        item_id: int,
+        payload: dict,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        done = bool(payload.get("done", False))
+        return update_checklist_item(app.state.db_path, username, board_id, item_id, done)
+
+    @app.delete("/api/boards/{board_id}/checklist/{item_id}", status_code=204)
+    def remove_checklist_item(
+        board_id: int,
+        item_id: int,
+        x_pm_session: str | None = Header(default=None),
+    ):
+        username = get_username_for_session(app.state.db_path, x_pm_session)
+        delete_checklist_item(app.state.db_path, username, board_id, item_id)
 
     @app.get("/api/boards/{board_id}/cards/{card_id}/comments")
     def read_card_comments(

@@ -242,6 +242,65 @@ export const restoreCard = async (
   return parseResponse(response);
 };
 
+export type ChecklistItem = {
+  id: number;
+  text: string;
+  done: boolean;
+};
+
+export const listChecklist = async (
+  sessionToken: string,
+  boardId: number,
+  cardId: string
+): Promise<ChecklistItem[]> => {
+  const response = await fetch(`/api/boards/${boardId}/cards/${cardId}/checklist`, {
+    headers: sessionHeaders(sessionToken),
+  });
+  return parseResponse(response);
+};
+
+export const addChecklistItem = async (
+  sessionToken: string,
+  boardId: number,
+  cardId: string,
+  text: string
+): Promise<ChecklistItem> => {
+  const response = await fetch(`/api/boards/${boardId}/cards/${cardId}/checklist`, {
+    method: "POST",
+    headers: { ...sessionHeaders(sessionToken), "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  return parseResponse(response);
+};
+
+export const toggleChecklistItem = async (
+  sessionToken: string,
+  boardId: number,
+  itemId: number,
+  done: boolean
+): Promise<ChecklistItem> => {
+  const response = await fetch(`/api/boards/${boardId}/checklist/${itemId}`, {
+    method: "PATCH",
+    headers: { ...sessionHeaders(sessionToken), "Content-Type": "application/json" },
+    body: JSON.stringify({ done }),
+  });
+  return parseResponse(response);
+};
+
+export const deleteChecklistItem = async (
+  sessionToken: string,
+  boardId: number,
+  itemId: number
+): Promise<void> => {
+  const response = await fetch(`/api/boards/${boardId}/checklist/${itemId}`, {
+    method: "DELETE",
+    headers: sessionHeaders(sessionToken),
+  });
+  if (!response.ok) {
+    throw new ApiError(`Request failed with status ${response.status}`, response.status);
+  }
+};
+
 export type Comment = {
   id: number;
   author: string;

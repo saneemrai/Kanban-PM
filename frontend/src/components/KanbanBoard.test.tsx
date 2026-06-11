@@ -37,6 +37,23 @@ const mockBoardFetch = (board: BoardData = initialData) => {
     if (url.includes("/activity")) {
       return Response.json([]);
     }
+    if (url.includes("/checklist") && init?.method === "POST") {
+      const body = JSON.parse(init.body as string);
+      return new Response(
+        JSON.stringify({ id: 1, text: body.text, done: false }),
+        { status: 201, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("/checklist") && init?.method === "PATCH") {
+      const body = JSON.parse(init.body as string);
+      return Response.json({ id: 1, text: "item", done: body.done });
+    }
+    if (url.includes("/checklist") && init?.method === "DELETE") {
+      return new Response(null, { status: 204 });
+    }
+    if (url.includes("/checklist")) {
+      return Response.json([]);
+    }
     if (url.includes("/archive") && !url.includes("/cards/") && init?.method !== "POST") {
       return Response.json([]);
     }
@@ -422,6 +439,20 @@ describe("KanbanBoard", () => {
 
     expect(await screen.findByRole("dialog", { name: /card archive/i })).toBeVisible();
     expect(screen.getByText("No archived cards")).toBeInTheDocument();
+  });
+
+  it("shows checklist section in card modal and adds an item", async () => {
+    mockBoardFetch();
+    render(<KanbanBoard {...defaultProps} />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getAllByRole("button", { name: /edit /i })[0]);
+    expect(screen.getByRole("region", { name: /checklist/i })).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText("Add checklist item"), "Write tests");
+    await userEvent.click(screen.getByRole("button", { name: /^Add$/i }));
+
+    expect(await screen.findByText("Write tests")).toBeInTheDocument();
   });
 
   it("shows comments section in card modal and posts a comment", async () => {
